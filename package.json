@@ -1,0 +1,26 @@
+{
+  "name": "lossless-agent-context",
+  "version": "0.0.1",
+  "description": "Provider-agnostic, lossless session and event storage for AI coding agents",
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "agents",
+    "llm",
+    "schema",
+    "events",
+    "tracing",
+    "ai-sdk"
+  ],
+  "author": "Stephen Shkeda <stephenshkeda@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
