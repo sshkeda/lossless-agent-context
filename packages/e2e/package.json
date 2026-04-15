@@ -1,0 +1,16 @@
+{
+  "name": "@lossless-agent-context/e2e",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "mkdir -p dist && printf 'ok\n' > dist/.build && tsc --noEmit -p tsconfig.json",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@lossless-agent-context/adapters": "workspace:*",
+    "@lossless-agent-context/core": "workspace:*",
+    "@lossless-agent-context/projection-ai-sdk": "workspace:*"
+  }
+}

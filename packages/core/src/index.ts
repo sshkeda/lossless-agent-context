@@ -8,6 +8,7 @@ export {
   messageEventSchema,
   modelCompletedEventSchema,
   modelRequestedEventSchema,
+  modelSelectedEventSchema,
   nativeRefSchema,
   providerEventSchema,
   reasoningEventSchema,

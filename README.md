@@ -1,46 +1,45 @@
 # lossless-agent-context
 
-Provider-agnostic, lossless session and event storage for AI coding agents.
+A Turborepo for provider-agnostic, lossless session and event storage for AI coding agents.
 
-## Goal
+## Packages
 
-`lossless-agent-context` is a canonical event schema for agent runtimes that need to:
+- `@lossless-agent-context/core`
+  - canonical event schemas and shared types
+- `@lossless-agent-context/adapters`
+  - native importers from provider/runtime logs into canonical events
+- `@lossless-agent-context/projection-ai-sdk`
+  - AI SDK-style message projection from canonical events
+- `@lossless-agent-context/e2e`
+  - fixture-driven end-to-end integration tests for every supported conversion path
 
-- hot-swap providers and models
-- preserve conversation, tool calls, tool results, and reasoning
-- keep exact replay/debugging history
-- support branching and session metadata
-- project into other formats like AI SDK messages and tracing systems
+## Why this exists
 
-## Design
+AI SDK messages are excellent UI state. OpenTelemetry/OpenInference are excellent traces. Provider-native logs are excellent raw evidence. None of them alone are the right source of truth for a hot-swappable coding-agent runtime.
 
-The architecture has three layers:
+`lossless-agent-context` uses:
 
-1. **Raw ingest**
-   - Preserve native source events from systems like Pi, Codex CLI, Claude Code, OpenAI Agents tracing, and AI SDK streams.
-2. **Canonical event log**
-   - A provider-agnostic, append-only event model that becomes the source of truth.
-3. **Projections**
-   - Derived views for AI SDK `UIMessage`, observability/tracing, replay UIs, analytics, and provider-specific prompt formats.
+1. raw native inputs
+2. a canonical, append-only event model
+3. projection/export layers into other ecosystems
 
-## Why not just use AI SDK or OpenTelemetry?
+## Scripts
 
-- AI SDK is excellent for chat/message persistence, but it is not a full agent runtime event log.
-- OpenTelemetry/OpenInference are excellent for tracing, but not ideal as the primary session transcript and replay format.
-- Provider-native formats are too provider-shaped to be the long-term canonical source of truth.
+```bash
+bun install
+bun run build
+bun run check
+bun run test
+```
 
-## Initial scope
+## Current conversion coverage
 
-This repo starts with:
+- Pi session JSONL -> canonical events
+- Claude Code JSONL -> canonical events
+- Codex JSONL -> canonical events
+- AI SDK-style messages -> canonical events
+- canonical events -> AI SDK-style message projection
 
-- a typed canonical event envelope
-- core event kinds for sessions, messages, reasoning, model runs, tool calls/results, branching, and errors
-- Zod schemas for validation
+## Testing philosophy
 
-## Next steps
-
-- add importers for Pi, Codex CLI, Claude Code, and OpenAI Agents traces
-- add AI SDK projection utilities
-- add OpenInference/OpenTelemetry projection utilities
-- add branch/replay helpers
-- add storage adapters (JSONL and database-backed)
+The `e2e` package uses realistic fixtures and runs full conversion pipelines so regressions show up at the system boundary, not just at the schema unit-test level.

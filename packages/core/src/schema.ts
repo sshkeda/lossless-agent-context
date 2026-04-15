@@ -21,13 +21,11 @@ export const nativeRefSchema = z.object({
   source: z.string(),
   formatVersion: z.string().optional(),
   rawRef: z.string().optional(),
+  raw: z.unknown().optional(),
 });
 
 export const contentPartSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("text"),
-    text: z.string(),
-  }),
+  z.object({ type: z.literal("text"), text: z.string() }),
   z.object({
     type: z.literal("file"),
     fileId: z.string(),
@@ -39,10 +37,7 @@ export const contentPartSchema = z.discriminatedUnion("type", [
     imageRef: z.string(),
     mediaType: z.string().optional(),
   }),
-  z.object({
-    type: z.literal("json"),
-    value: z.unknown(),
-  }),
+  z.object({ type: z.literal("json"), value: z.unknown() }),
 ]);
 
 export const baseEnvelopeSchema = z.object({
@@ -76,6 +71,14 @@ export const branchCreatedEventSchema = baseEnvelopeSchema.extend({
     fromBranchId: z.string().optional(),
     fromEventId: z.string().optional(),
     reason: z.string().optional(),
+  }),
+});
+
+export const modelSelectedEventSchema = baseEnvelopeSchema.extend({
+  kind: z.literal("model.selected"),
+  payload: z.object({
+    provider: z.string(),
+    model: z.string(),
   }),
 });
 
@@ -163,6 +166,7 @@ export const providerEventSchema = baseEnvelopeSchema.extend({
 export const canonicalEventSchema = z.discriminatedUnion("kind", [
   sessionCreatedEventSchema,
   branchCreatedEventSchema,
+  modelSelectedEventSchema,
   messageEventSchema,
   reasoningEventSchema,
   modelRequestedEventSchema,

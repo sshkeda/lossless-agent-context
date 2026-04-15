@@ -1,0 +1,6 @@
+{"timestamp":"2026-03-23T13:37:28.689Z","type":"session_meta","payload":{"id":"codex-session-1","timestamp":"2026-03-23T13:19:01.660Z","cwd":"/tmp/lossless-agent-context","model_provider":"openai"}}
+{"timestamp":"2026-03-23T13:37:28.692Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"say goodmorning with some thoughtful advice"}]}}
+{"timestamp":"2026-03-23T15:41:07.911Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Planning automation process"}]}}
+{"timestamp":"2026-03-23T15:41:08.329Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"echo hello\"}","call_id":"call_abc123"}}
+{"timestamp":"2026-03-23T15:41:08.398Z","type":"response_item","payload":{"type":"function_call_output","call_id":"call_abc123","output":"Command: /bin/zsh -lc 'echo hello'\nOutput:\nhello\n"}}
+{"timestamp":"2026-03-23T15:56:14.908Z","type":"event_msg","payload":{"type":"agent_message","message":"I found no existing memory for this automation."}}
