@@ -73,15 +73,14 @@ export const systemE2EMatrix: DomainEntry[] = [
     domain: "live-provider-smoke",
     status: "implemented",
     coverage: [
-      "provider-native event ingestion from live runs",
+      "provider-native CLI event ingestion from live runs",
       "cross-provider semantic equivalence smoke tests",
+      "local authenticated claude / codex / pi CLI smoke runs",
     ],
     activation: {
       envFlag: "LAC_ENABLE_LIVE_PROVIDER_E2E",
       requiredVars: [
-        "LAC_ENABLE_LIVE_PROVIDER_E2E",
-        "OPENAI_API_KEY",
-        "ANTHROPIC_API_KEY",
+        "LAC_ENABLE_LIVE_PROVIDER_E2E"
       ],
     },
   },

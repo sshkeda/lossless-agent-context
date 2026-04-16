@@ -1,111 +1,128 @@
-import { randomUUID } from "node:crypto";
-import { importAnthropicMessageTrace, importOpenAIChatCompletionTrace } from "@lossless-agent-context/adapters";
-import { canonicalEventSchema } from "@lossless-agent-context/core";
+import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { importClaudePrintResult, importCodexExecJsonl, importPiSessionJsonl, type ClaudePrintResult } from "@lossless-agent-context/adapters";
+import { canonicalEventSchema, type CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
 
 const enabled = process.env.LAC_ENABLE_LIVE_PROVIDER_E2E === "1";
 const run = enabled ? it : it.skip;
 
-const OPENAI_MODEL = process.env.LAC_OPENAI_MODEL ?? "gpt-4.1-mini";
-const ANTHROPIC_MODEL = process.env.LAC_ANTHROPIC_MODEL ?? "claude-3-5-haiku-latest";
 const PROMPT =
-  'Compute 2+2. Reply with ONLY minified JSON matching exactly this shape: {"task":"smoke-test","status":"ok","sum":4}';
+  'Reply with ONLY minified JSON matching exactly this shape: {"task":"cli-smoke","status":"ok","sum":4}. Compute 2+2 first and set sum accordingly.';
+const SYSTEM = "You are a precise JSON-only assistant.";
 
 describe("live provider smoke e2e", () => {
-  run("captures OpenAI and Anthropic live responses, imports them, and checks semantic equivalence", async () => {
-    expect(process.env.OPENAI_API_KEY).toBeTruthy();
-    expect(process.env.ANTHROPIC_API_KEY).toBeTruthy();
+  run("uses local claude, codex, and pi CLIs with existing auth and checks semantic equivalence", async () => {
+    const claudeEvents = canonicalEventSchema.array().parse(runClaudeCliSmoke());
+    const codexEvents = canonicalEventSchema.array().parse(runCodexCliSmoke());
+    const piEvents = canonicalEventSchema.array().parse(runPiCliSmoke());
 
-    const openaiTrace = await callOpenAI();
-    const anthropicTrace = await callAnthropic();
+    const claudeJson = parseStrictJson(getFinalAssistantText(claudeEvents));
+    const codexJson = parseStrictJson(getFinalAssistantText(codexEvents));
+    const piJson = parseStrictJson(getFinalAssistantText(piEvents));
 
-    const openaiEvents = canonicalEventSchema.array().parse(importOpenAIChatCompletionTrace(openaiTrace));
-    const anthropicEvents = canonicalEventSchema.array().parse(importAnthropicMessageTrace(anthropicTrace));
-
-    expect(openaiEvents.some(event => event.kind === "model.completed")).toBe(true);
-    expect(anthropicEvents.some(event => event.kind === "model.completed")).toBe(true);
-
-    const openaiAssistantText = getFinalAssistantText(openaiEvents);
-    const anthropicAssistantText = getFinalAssistantText(anthropicEvents);
-
-    const openaiJson = parseStrictJson(openaiAssistantText);
-    const anthropicJson = parseStrictJson(anthropicAssistantText);
-
-    expect(openaiJson).toEqual({ task: "smoke-test", status: "ok", sum: 4 });
-    expect(anthropicJson).toEqual({ task: "smoke-test", status: "ok", sum: 4 });
-  }, 30_000);
+    expect(claudeJson).toEqual({ task: "cli-smoke", status: "ok", sum: 4 });
+    expect(codexJson).toEqual({ task: "cli-smoke", status: "ok", sum: 4 });
+    expect(piJson).toEqual({ task: "cli-smoke", status: "ok", sum: 4 });
+  }, 60_000);
 });
 
-async function callOpenAI() {
-  const timestamp = new Date().toISOString();
-  const request = {
-    model: OPENAI_MODEL,
-    temperature: 0,
-    messages: [
-      { role: "system" as const, content: "You are a precise JSON-only assistant." },
-      { role: "user" as const, content: PROMPT },
+function runClaudeCliSmoke(): CanonicalEvent[] {
+  const result = spawnSync(
+    "claude",
+    [
+      "-p",
+      "--output-format",
+      "json",
+      "--permission-mode",
+      "bypassPermissions",
+      "--tools",
+      "",
+      "--system-prompt",
+      SYSTEM,
     ],
-  };
-
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+    {
+      input: PROMPT,
+      encoding: "utf8",
     },
-    body: JSON.stringify(request),
-  });
+  );
 
-  const body = await response.json();
-  expect(response.ok, JSON.stringify(body)).toBe(true);
-
-  return {
-    sessionId: `openai-live-${randomUUID()}`,
-    timestamp,
-    request,
-    response: body,
-  };
+  expect(result.status, result.stderr).toBe(0);
+  const parsed = JSON.parse(result.stdout.trim()) as ClaudePrintResult;
+  return importClaudePrintResult(parsed, PROMPT);
 }
 
-async function callAnthropic() {
-  const timestamp = new Date().toISOString();
-  const request = {
-    model: ANTHROPIC_MODEL,
-    temperature: 0,
-    max_tokens: 128,
-    system: "You are a precise JSON-only assistant.",
-    messages: [{ role: "user" as const, content: PROMPT }],
-  };
-
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": process.env.ANTHROPIC_API_KEY as string,
-      "anthropic-version": "2023-06-01",
+function runCodexCliSmoke(): CanonicalEvent[] {
+  const result = spawnSync(
+    "codex",
+    [
+      "exec",
+      "--skip-git-repo-check",
+      "--sandbox",
+      "read-only",
+      "--json",
+      "-",
+    ],
+    {
+      input: `${SYSTEM}\n\n${PROMPT}`,
+      encoding: "utf8",
     },
-    body: JSON.stringify(request),
-  });
+  );
 
-  const body = await response.json();
-  expect(response.ok, JSON.stringify(body)).toBe(true);
-
-  return {
-    sessionId: `anthropic-live-${randomUUID()}`,
-    timestamp,
-    request,
-    response: body,
-  };
+  expect(result.status, result.stderr).toBe(0);
+  const stdout = result.stdout
+    .split(/\r?\n/)
+    .filter(line => line.trim().startsWith("{"))
+    .join("\n");
+  return importCodexExecJsonl(stdout, PROMPT);
 }
 
-function getFinalAssistantText(events: Array<{ kind: string; payload: any }>): string {
+function runPiCliSmoke(): CanonicalEvent[] {
+  const sessionDir = mkdtempSync(join(tmpdir(), "lac-pi-cli-"));
+  const result = spawnSync(
+    "pi",
+    [
+      "-p",
+      "--mode",
+      "json",
+      "--no-tools",
+      "--no-extensions",
+      "--no-skills",
+      "--system-prompt",
+      SYSTEM,
+      "--session-dir",
+      sessionDir,
+    ],
+    {
+      input: PROMPT,
+      encoding: "utf8",
+    },
+  );
+
+  expect(result.status, result.stderr).toBe(0);
+  const sessionFile = readSingleSessionFile(sessionDir);
+  return importPiSessionJsonl(readFileSync(sessionFile, "utf8"));
+}
+
+function readSingleSessionFile(sessionDir: string): string {
+  const files = readdirSync(sessionDir);
+  expect(files.length).toBe(1);
+  return join(sessionDir, files[0]!);
+}
+
+function getFinalAssistantText(events: CanonicalEvent[]): string {
   const assistantMessages = events.filter(
-    event => event.kind === "message.created" && event.payload.role === "assistant",
+    (event): event is Extract<CanonicalEvent, { kind: "message.created" }> =>
+      event.kind === "message.created" && event.payload.role === "assistant",
   );
   const last = assistantMessages.at(-1);
-  const textPart = last?.payload.parts.find((part: { type: string }) => part.type === "text");
+  const textPart = last?.payload.parts.find(
+    (part): part is Extract<typeof part, { type: "text" }> => part.type === "text",
+  );
   expect(textPart?.text).toBeTruthy();
-  return textPart.text;
+  return textPart!.text;
 }
 
 function parseStrictJson(text: string): unknown {
@@ -118,6 +135,6 @@ function parseStrictJson(text: string): unknown {
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
       return JSON.parse(trimmed.slice(firstBrace, lastBrace + 1));
     }
-    throw new Error(`Could not parse JSON from provider output: ${trimmed}`);
+    throw new Error(`Could not parse JSON from CLI output: ${trimmed}`);
   }
 }

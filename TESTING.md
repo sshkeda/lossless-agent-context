@@ -52,16 +52,14 @@ LAC_REAL_CODEX_SESSION=~/.codex/archived_sessions/...jsonl \
 bun run test
 ```
 
-Run live provider smoke e2e:
+Run live provider smoke e2e with your existing local CLI auth:
 
 ```bash
 LAC_ENABLE_LIVE_PROVIDER_E2E=1 \
-OPENAI_API_KEY=... \
-ANTHROPIC_API_KEY=... \
-LAC_OPENAI_MODEL=gpt-4.1-mini \
-LAC_ANTHROPIC_MODEL=claude-3-5-haiku-latest \
 bun run test
 ```
+
+This suite uses the locally authenticated `claude`, `codex`, and `pi` CLIs rather than API-key env vars.
 
 ## Rule
 

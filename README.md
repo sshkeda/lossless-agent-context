@@ -56,7 +56,7 @@ Implemented today:
 - projection round-trip stability checks
 - branch-aware replay e2e
 - env-gated real local log import tests
-- env-gated live provider smoke e2e
+- env-gated live provider smoke e2e via local authenticated `claude`, `codex`, and `pi` CLIs
 
 Planned and tracked explicitly for the future system:
 - none in the current matrix
