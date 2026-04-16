@@ -33,10 +33,19 @@
         "@lossless-agent-context/adapters": "workspace:*",
         "@lossless-agent-context/core": "workspace:*",
         "@lossless-agent-context/projection-ai-sdk": "workspace:*",
+        "@lossless-agent-context/projection-openinference": "workspace:*",
       },
     },
     "packages/projection-ai-sdk": {
       "name": "@lossless-agent-context/projection-ai-sdk",
+      "version": "0.0.1",
+      "dependencies": {
+        "@lossless-agent-context/core": "workspace:*",
+        "zod": "^3.25.76",
+      },
+    },
+    "packages/projection-openinference": {
+      "name": "@lossless-agent-context/projection-openinference",
       "version": "0.0.1",
       "dependencies": {
         "@lossless-agent-context/core": "workspace:*",
@@ -106,6 +115,8 @@
     "@lossless-agent-context/e2e": ["@lossless-agent-context/e2e@workspace:packages/e2e"],
 
     "@lossless-agent-context/projection-ai-sdk": ["@lossless-agent-context/projection-ai-sdk@workspace:packages/projection-ai-sdk"],
+
+    "@lossless-agent-context/projection-openinference": ["@lossless-agent-context/projection-openinference@workspace:packages/projection-openinference"],
 
     "@rollup/rollup-android-arm-eabi": ["@rollup/rollup-android-arm-eabi@4.60.1", "", { "os": "android", "cpu": "arm" }, "sha512-d6FinEBLdIiK+1uACUttJKfgZREXrF0Qc2SmLII7W2AD8FfiZ9Wjd+rD/iRuf5s5dWrr1GgwXCvPqOuDquOowA=="],
 

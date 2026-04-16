@@ -17,7 +17,6 @@ describe("future system e2e matrix", () => {
     const planned = systemE2EMatrix.filter(entry => entry.status === "planned");
     expect(planned.map(entry => entry.domain)).toEqual([
       "replay-engine",
-      "openinference-export",
       "live-provider-smoke",
     ]);
   });

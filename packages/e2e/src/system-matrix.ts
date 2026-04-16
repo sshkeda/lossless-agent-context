@@ -63,7 +63,7 @@ export const systemE2EMatrix: DomainEntry[] = [
   },
   {
     domain: "openinference-export",
-    status: "planned",
+    status: "implemented",
     coverage: [
       "canonical -> OpenInference span export",
       "golden OTEL payload assertions",

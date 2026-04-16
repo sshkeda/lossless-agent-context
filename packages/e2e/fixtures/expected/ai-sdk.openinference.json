@@ -1,0 +1,102 @@
+[
+  {
+    "traceId": "ai-sdk-session-1",
+    "spanId": "ai-sdk-session-1:000000",
+    "name": "session.created",
+    "startTime": "1970-01-01T00:00:00.000Z",
+    "endTime": "1970-01-01T00:00:00.000Z",
+    "attributes": {
+      "session.id": "ai-sdk-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "session.created",
+      "openinference.span.kind": "CHAIN",
+      "input.value": "AI SDK import",
+      "metadata.started_at": "1970-01-01T00:00:00.000Z",
+      "metadata.working_directory": null
+    }
+  },
+  {
+    "traceId": "ai-sdk-session-1",
+    "spanId": "ai-sdk-session-1:000001",
+    "parentSpanId": "ai-sdk-session-1:000000",
+    "name": "message.created",
+    "startTime": "1970-01-01T00:00:00.000Z",
+    "endTime": "1970-01-01T00:00:00.000Z",
+    "attributes": {
+      "session.id": "ai-sdk-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "user",
+      "input.value": "Find the project README"
+    }
+  },
+  {
+    "traceId": "ai-sdk-session-1",
+    "spanId": "ai-sdk-session-1:000002",
+    "parentSpanId": "ai-sdk-session-1:000001",
+    "name": "reasoning.created",
+    "startTime": "1970-01-01T00:00:00.000Z",
+    "endTime": "1970-01-01T00:00:00.000Z",
+    "attributes": {
+      "session.id": "ai-sdk-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "reasoning.created",
+      "openinference.span.kind": "AGENT",
+      "output.value": "I should inspect the repository root.",
+      "metadata.reasoning_visibility": "summary",
+      "metadata.provider_exposed": true
+    }
+  },
+  {
+    "traceId": "ai-sdk-session-1",
+    "spanId": "ai-sdk-session-1:000003",
+    "parentSpanId": "ai-sdk-session-1:000002",
+    "name": "tool.call",
+    "startTime": "1970-01-01T00:00:00.000Z",
+    "endTime": "1970-01-01T00:00:00.000Z",
+    "attributes": {
+      "session.id": "ai-sdk-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.call",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "tc1",
+      "tool.name": "read",
+      "tool.parameters": "{\"path\":\"README.md\"}"
+    }
+  },
+  {
+    "traceId": "ai-sdk-session-1",
+    "spanId": "ai-sdk-session-1:000004",
+    "parentSpanId": "ai-sdk-session-1:000003",
+    "name": "tool.result",
+    "startTime": "1970-01-01T00:00:00.000Z",
+    "endTime": "1970-01-01T00:00:00.000Z",
+    "attributes": {
+      "session.id": "ai-sdk-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.result",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "tc1",
+      "output.value": "# README",
+      "metadata.is_error": false,
+      "exception.message": null
+    }
+  },
+  {
+    "traceId": "ai-sdk-session-1",
+    "spanId": "ai-sdk-session-1:000005",
+    "parentSpanId": "ai-sdk-session-1:000004",
+    "name": "message.created",
+    "startTime": "1970-01-01T00:00:00.000Z",
+    "endTime": "1970-01-01T00:00:00.000Z",
+    "attributes": {
+      "session.id": "ai-sdk-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "assistant",
+      "output.value": "I found the README."
+    }
+  }
+]

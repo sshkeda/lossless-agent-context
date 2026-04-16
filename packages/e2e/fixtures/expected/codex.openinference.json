@@ -1,0 +1,102 @@
+[
+  {
+    "traceId": "codex-session-1",
+    "spanId": "codex-session-1:000000",
+    "name": "session.created",
+    "startTime": "2026-03-23T13:37:28.689Z",
+    "endTime": "2026-03-23T13:37:28.689Z",
+    "attributes": {
+      "session.id": "codex-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "session.created",
+      "openinference.span.kind": "CHAIN",
+      "input.value": null,
+      "metadata.started_at": "2026-03-23T13:19:01.660Z",
+      "metadata.working_directory": "/tmp/lossless-agent-context"
+    }
+  },
+  {
+    "traceId": "codex-session-1",
+    "spanId": "codex-session-1:000001",
+    "parentSpanId": "codex-session-1:000000",
+    "name": "message.created",
+    "startTime": "2026-03-23T13:37:28.692Z",
+    "endTime": "2026-03-23T13:37:28.692Z",
+    "attributes": {
+      "session.id": "codex-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "user",
+      "input.value": "say goodmorning with some thoughtful advice"
+    }
+  },
+  {
+    "traceId": "codex-session-1",
+    "spanId": "codex-session-1:000002",
+    "parentSpanId": "codex-session-1:000001",
+    "name": "reasoning.created",
+    "startTime": "2026-03-23T15:41:07.911Z",
+    "endTime": "2026-03-23T15:41:07.911Z",
+    "attributes": {
+      "session.id": "codex-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "reasoning.created",
+      "openinference.span.kind": "AGENT",
+      "output.value": "Planning automation process",
+      "metadata.reasoning_visibility": "summary",
+      "metadata.provider_exposed": true
+    }
+  },
+  {
+    "traceId": "codex-session-1",
+    "spanId": "codex-session-1:000003",
+    "parentSpanId": "codex-session-1:000002",
+    "name": "tool.call",
+    "startTime": "2026-03-23T15:41:08.329Z",
+    "endTime": "2026-03-23T15:41:08.329Z",
+    "attributes": {
+      "session.id": "codex-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.call",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "call_abc123",
+      "tool.name": "exec_command",
+      "tool.parameters": "{\"cmd\":\"echo hello\"}"
+    }
+  },
+  {
+    "traceId": "codex-session-1",
+    "spanId": "codex-session-1:000004",
+    "parentSpanId": "codex-session-1:000003",
+    "name": "tool.result",
+    "startTime": "2026-03-23T15:41:08.398Z",
+    "endTime": "2026-03-23T15:41:08.398Z",
+    "attributes": {
+      "session.id": "codex-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.result",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "call_abc123",
+      "output.value": "Command: /bin/zsh -lc 'echo hello'\nOutput:\nhello\n",
+      "metadata.is_error": false,
+      "exception.message": null
+    }
+  },
+  {
+    "traceId": "codex-session-1",
+    "spanId": "codex-session-1:000005",
+    "parentSpanId": "codex-session-1:000004",
+    "name": "message.created",
+    "startTime": "2026-03-23T15:56:14.908Z",
+    "endTime": "2026-03-23T15:56:14.908Z",
+    "attributes": {
+      "session.id": "codex-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "assistant",
+      "output.value": "I found no existing memory for this automation."
+    }
+  }
+]

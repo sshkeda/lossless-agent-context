@@ -27,10 +27,10 @@ Implemented now:
 - fixture corpus e2e
 - projection roundtrip e2e
 - real local log e2e harness (env-gated)
+- OpenInference exporter e2e
 
 Planned for future subsystems:
 - replay engine e2e
-- OpenInference exporter e2e
 - live provider smoke e2e
 
 ## Commands

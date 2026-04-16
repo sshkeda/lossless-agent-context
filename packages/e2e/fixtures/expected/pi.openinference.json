@@ -1,0 +1,102 @@
+[
+  {
+    "traceId": "pi-session-1",
+    "spanId": "pi-session-1:000000",
+    "name": "session.created",
+    "startTime": "2026-04-15T23:29:28.744Z",
+    "endTime": "2026-04-15T23:29:28.744Z",
+    "attributes": {
+      "session.id": "pi-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "session.created",
+      "openinference.span.kind": "CHAIN",
+      "input.value": null,
+      "metadata.started_at": "2026-04-15T23:29:28.744Z",
+      "metadata.working_directory": "/tmp/lossless-agent-context"
+    }
+  },
+  {
+    "traceId": "pi-session-1",
+    "spanId": "pi-session-1:000001",
+    "parentSpanId": "pi-session-1:000000",
+    "name": "model.selected",
+    "startTime": "2026-04-15T23:29:29.133Z",
+    "endTime": "2026-04-15T23:29:29.133Z",
+    "attributes": {
+      "session.id": "pi-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "model.selected",
+      "openinference.span.kind": "LLM",
+      "llm.provider": "claude-code",
+      "llm.model_name": "claude-opus-4-6"
+    }
+  },
+  {
+    "traceId": "pi-session-1",
+    "spanId": "pi-session-1:000002",
+    "parentSpanId": "pi-session-1:000001",
+    "name": "message.created",
+    "startTime": "2026-04-15T23:29:35.645Z",
+    "endTime": "2026-04-15T23:29:35.645Z",
+    "attributes": {
+      "session.id": "pi-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "user",
+      "input.value": "spin up the dev server pls"
+    }
+  },
+  {
+    "traceId": "pi-session-1",
+    "spanId": "pi-session-1:000003",
+    "parentSpanId": "pi-session-1:000002",
+    "name": "reasoning.created",
+    "startTime": "2026-04-15T23:29:35.652Z",
+    "endTime": "2026-04-15T23:29:35.652Z",
+    "attributes": {
+      "session.id": "pi-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "reasoning.created",
+      "openinference.span.kind": "AGENT",
+      "output.value": "Need to start the dev server.",
+      "metadata.reasoning_visibility": "full",
+      "metadata.provider_exposed": true
+    }
+  },
+  {
+    "traceId": "pi-session-1",
+    "spanId": "pi-session-1:000004",
+    "parentSpanId": "pi-session-1:000003",
+    "name": "tool.call",
+    "startTime": "2026-04-15T23:29:35.652Z",
+    "endTime": "2026-04-15T23:29:35.652Z",
+    "attributes": {
+      "session.id": "pi-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.call",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "call_1",
+      "tool.name": "ask_claude_code",
+      "tool.parameters": "{\"input\":\"spin up the dev server pls\"}"
+    }
+  },
+  {
+    "traceId": "pi-session-1",
+    "spanId": "pi-session-1:000005",
+    "parentSpanId": "pi-session-1:000004",
+    "name": "tool.result",
+    "startTime": "2026-04-15T23:29:46.900Z",
+    "endTime": "2026-04-15T23:29:46.900Z",
+    "attributes": {
+      "session.id": "pi-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.result",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "call_1",
+      "output.value": "[{\"type\":\"text\",\"text\":\"{\\\"output\\\":\\\"Dev server is starting\\\"}\"}]",
+      "metadata.is_error": false,
+      "exception.message": null
+    }
+  }
+]

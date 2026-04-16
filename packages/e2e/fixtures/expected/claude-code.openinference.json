@@ -1,0 +1,134 @@
+[
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000000",
+    "name": "session.created",
+    "startTime": "2026-03-17T00:19:52.225Z",
+    "endTime": "2026-03-17T00:19:52.225Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "session.created",
+      "openinference.span.kind": "CHAIN",
+      "input.value": null,
+      "metadata.started_at": "2026-03-17T00:19:52.225Z",
+      "metadata.working_directory": "/tmp/lossless-agent-context"
+    }
+  },
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000001",
+    "parentSpanId": "claude-session-1:000000",
+    "name": "provider.event",
+    "startTime": "2026-03-17T00:19:52.225Z",
+    "endTime": "2026-03-17T00:19:52.225Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "provider.event",
+      "openinference.span.kind": "CHAIN",
+      "metadata.provider": "claude-code",
+      "metadata.provider_event_type": "system"
+    }
+  },
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000002",
+    "parentSpanId": "claude-session-1:000001",
+    "name": "message.created",
+    "startTime": "2026-03-17T00:19:54.623Z",
+    "endTime": "2026-03-17T00:19:54.623Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "user",
+      "input.value": "what is admin creds?"
+    }
+  },
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000003",
+    "parentSpanId": "claude-session-1:000002",
+    "name": "reasoning.created",
+    "startTime": "2026-03-17T00:19:58.464Z",
+    "endTime": "2026-03-17T00:19:58.464Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "reasoning.created",
+      "openinference.span.kind": "AGENT",
+      "output.value": "I should inspect the env docs first.",
+      "metadata.reasoning_visibility": "full",
+      "metadata.provider_exposed": true
+    }
+  },
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000004",
+    "parentSpanId": "claude-session-1:000003",
+    "name": "message.created",
+    "startTime": "2026-03-17T00:19:58.464Z",
+    "endTime": "2026-03-17T00:19:58.464Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "assistant",
+      "output.value": "Let me search the codebase for admin credential references."
+    }
+  },
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000005",
+    "parentSpanId": "claude-session-1:000004",
+    "name": "tool.call",
+    "startTime": "2026-03-17T00:19:58.464Z",
+    "endTime": "2026-03-17T00:19:58.464Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.call",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "toolu_123",
+      "tool.name": "Grep",
+      "tool.parameters": "{\"pattern\":\"admin\",\"-i\":true}"
+    }
+  },
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000006",
+    "parentSpanId": "claude-session-1:000005",
+    "name": "tool.result",
+    "startTime": "2026-03-17T00:19:58.481Z",
+    "endTime": "2026-03-17T00:19:58.481Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "tool.result",
+      "openinference.span.kind": "TOOL",
+      "tool.id": "toolu_123",
+      "output.value": "Found 27 files",
+      "metadata.is_error": false,
+      "exception.message": null
+    }
+  },
+  {
+    "traceId": "claude-session-1",
+    "spanId": "claude-session-1:000007",
+    "parentSpanId": "claude-session-1:000006",
+    "name": "message.created",
+    "startTime": "2026-03-17T00:20:07.388Z",
+    "endTime": "2026-03-17T00:20:07.388Z",
+    "attributes": {
+      "session.id": "claude-session-1",
+      "metadata.branch_id": "main",
+      "metadata.event_kind": "message.created",
+      "openinference.span.kind": "CHAIN",
+      "metadata.role": "assistant",
+      "output.value": "The admin credentials are set via environment variables."
+    }
+  }
+]
