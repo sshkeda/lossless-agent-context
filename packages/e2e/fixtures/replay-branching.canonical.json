@@ -1,0 +1,112 @@
+[
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000000",
+    "sessionId": "replay-session-1",
+    "branchId": "main",
+    "seq": 0,
+    "timestamp": "2026-01-01T00:00:00.000Z",
+    "kind": "session.created",
+    "payload": { "startedAt": "2026-01-01T00:00:00.000Z", "title": "Replay fixture" }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000001",
+    "sessionId": "replay-session-1",
+    "branchId": "main",
+    "seq": 1,
+    "timestamp": "2026-01-01T00:00:01.000Z",
+    "kind": "message.created",
+    "payload": { "role": "user", "parts": [{ "type": "text", "text": "start" }] }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000002",
+    "sessionId": "replay-session-1",
+    "branchId": "main",
+    "seq": 2,
+    "timestamp": "2026-01-01T00:00:02.000Z",
+    "kind": "reasoning.created",
+    "payload": { "visibility": "summary", "text": "plan main", "providerExposed": true }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000003",
+    "sessionId": "replay-session-1",
+    "branchId": "main",
+    "seq": 3,
+    "timestamp": "2026-01-01T00:00:03.000Z",
+    "kind": "tool.call",
+    "payload": { "toolCallId": "tc-main", "name": "search", "arguments": { "query": "main path" } }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000004",
+    "sessionId": "replay-session-1",
+    "branchId": "main",
+    "seq": 4,
+    "timestamp": "2026-01-01T00:00:04.000Z",
+    "kind": "tool.result",
+    "payload": { "toolCallId": "tc-main", "output": "main output", "isError": false }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000005",
+    "sessionId": "replay-session-1",
+    "branchId": "fix-a",
+    "seq": 5,
+    "timestamp": "2026-01-01T00:00:05.000Z",
+    "kind": "branch.created",
+    "payload": { "fromBranchId": "main", "fromEventId": "replay-session-1:000004", "reason": "try fix a" }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000006",
+    "sessionId": "replay-session-1",
+    "branchId": "main",
+    "seq": 6,
+    "timestamp": "2026-01-01T00:00:06.000Z",
+    "kind": "message.created",
+    "payload": { "role": "assistant", "parts": [{ "type": "text", "text": "continue main" }] }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000007",
+    "sessionId": "replay-session-1",
+    "branchId": "fix-a",
+    "seq": 7,
+    "timestamp": "2026-01-01T00:00:07.000Z",
+    "kind": "message.created",
+    "payload": { "role": "assistant", "parts": [{ "type": "text", "text": "forked path" }] }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000008",
+    "sessionId": "replay-session-1",
+    "branchId": "fix-a",
+    "seq": 8,
+    "timestamp": "2026-01-01T00:00:08.000Z",
+    "kind": "tool.call",
+    "payload": { "toolCallId": "tc-fix", "name": "patch", "arguments": { "file": "app.ts" } }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000009",
+    "sessionId": "replay-session-1",
+    "branchId": "fix-a",
+    "seq": 9,
+    "timestamp": "2026-01-01T00:00:09.000Z",
+    "kind": "tool.result",
+    "payload": { "toolCallId": "tc-fix", "output": "patched", "isError": false }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "replay-session-1:000010",
+    "sessionId": "replay-session-1",
+    "branchId": "fix-a",
+    "seq": 10,
+    "timestamp": "2026-01-01T00:00:10.000Z",
+    "kind": "message.created",
+    "payload": { "role": "assistant", "parts": [{ "type": "text", "text": "done fork" }] }
+  }
+]

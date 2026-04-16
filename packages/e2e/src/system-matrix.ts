@@ -54,7 +54,7 @@ export const systemE2EMatrix: DomainEntry[] = [
   },
   {
     domain: "replay-engine",
-    status: "planned",
+    status: "implemented",
     coverage: [
       "event timeline replay",
       "checkpoint/fork replay",

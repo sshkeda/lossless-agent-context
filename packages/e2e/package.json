@@ -13,6 +13,7 @@
     "@lossless-agent-context/adapters": "workspace:*",
     "@lossless-agent-context/core": "workspace:*",
     "@lossless-agent-context/projection-ai-sdk": "workspace:*",
-    "@lossless-agent-context/projection-openinference": "workspace:*"
+    "@lossless-agent-context/projection-openinference": "workspace:*",
+    "@lossless-agent-context/replay": "workspace:*"
   }
 }

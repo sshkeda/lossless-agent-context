@@ -28,9 +28,9 @@ Implemented now:
 - projection roundtrip e2e
 - real local log e2e harness (env-gated)
 - OpenInference exporter e2e
+- replay engine e2e
 
 Planned for future subsystems:
-- replay engine e2e
 - live provider smoke e2e
 
 ## Commands

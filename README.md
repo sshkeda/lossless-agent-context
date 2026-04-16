@@ -12,6 +12,8 @@ A Turborepo for provider-agnostic, lossless session and event storage for AI cod
   - AI SDK-style message projection from canonical events
 - `@lossless-agent-context/projection-openinference`
   - OpenInference-style span projection from canonical events
+- `@lossless-agent-context/replay`
+  - deterministic branch-aware timeline replay helpers
 - `@lossless-agent-context/e2e`
   - fixture-driven end-to-end integration tests for every supported conversion path
 
@@ -52,10 +54,10 @@ Implemented today:
 - exact AI SDK projection assertions
 - exact OpenInference-style exporter assertions
 - projection round-trip stability checks
+- branch-aware replay e2e
 - env-gated real local log import tests
 
 Planned and tracked explicitly for the future system:
-- replay-engine e2e
 - live-provider smoke e2e
 
 See [TESTING.md](./TESTING.md) for the full matrix.

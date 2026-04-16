@@ -16,7 +16,6 @@ describe("future system e2e matrix", () => {
   it("marks the missing future-system suites explicitly instead of pretending they exist", () => {
     const planned = systemE2EMatrix.filter(entry => entry.status === "planned");
     expect(planned.map(entry => entry.domain)).toEqual([
-      "replay-engine",
       "live-provider-smoke",
     ]);
   });
