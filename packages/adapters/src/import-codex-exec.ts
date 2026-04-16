@@ -1,12 +1,16 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { DEFAULT_BRANCH_ID, createEvent, parseJsonl, toIsoTimestamp } from "./utils";
+import { createEvent, DEFAULT_BRANCH_ID, parseJsonl, toIsoTimestamp } from "./utils";
 
 export type CodexExecEvent = Record<string, unknown>;
 
-export function importCodexExecJsonl(text: string, prompt: string, timestamp = new Date().toISOString()): CanonicalEvent[] {
+export function importCodexExecJsonl(
+  text: string,
+  prompt: string,
+  timestamp = new Date().toISOString(),
+): CanonicalEvent[] {
   const lines = parseJsonl(text) as CodexExecEvent[];
   const events: CanonicalEvent[] = [];
-  const threadStarted = lines.find(line => line.type === "thread.started");
+  const threadStarted = lines.find((line) => line.type === "thread.started");
   const sessionId = typeof threadStarted?.thread_id === "string" ? threadStarted.thread_id : "codex-exec-session";
   const branchId = DEFAULT_BRANCH_ID;
   const isoTimestamp = toIsoTimestamp(timestamp);

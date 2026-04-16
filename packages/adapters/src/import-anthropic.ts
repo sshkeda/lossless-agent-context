@@ -1,5 +1,5 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { DEFAULT_BRANCH_ID, createEvent, toIsoTimestamp } from "./utils";
+import { createEvent, DEFAULT_BRANCH_ID, toIsoTimestamp } from "./utils";
 
 export type AnthropicMessageTrace = {
   sessionId: string;
@@ -95,8 +95,8 @@ export function importAnthropicMessageTrace(trace: AnthropicMessageTrace): Canon
   }
 
   const outputText = (trace.response.content ?? [])
-    .filter(block => block.type === "text" && typeof block.text === "string")
-    .map(block => block.text as string)
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((block) => block.text as string)
     .join("\n");
 
   if (outputText) {
@@ -128,9 +128,7 @@ export function importAnthropicMessageTrace(trace: AnthropicMessageTrace): Canon
         ? {
             inputTokens: trace.response.usage.input_tokens,
             outputTokens: trace.response.usage.output_tokens,
-            totalTokens:
-              (trace.response.usage.input_tokens ?? 0) +
-              (trace.response.usage.output_tokens ?? 0),
+            totalTokens: (trace.response.usage.input_tokens ?? 0) + (trace.response.usage.output_tokens ?? 0),
           }
         : undefined,
     },

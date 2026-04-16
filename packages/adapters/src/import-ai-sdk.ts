@@ -1,6 +1,6 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { z } from "zod";
-import { DEFAULT_BRANCH_ID, createEvent } from "./utils";
+import { createEvent, DEFAULT_BRANCH_ID } from "./utils";
 
 const aiSdkPartSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }),
@@ -126,12 +126,14 @@ export function importAiSdkMessages(messages: AiSdkMessageLike[], sessionId = "a
           actor: { type: message.role === "assistant" ? "assistant" : message.role === "tool" ? "tool" : message.role },
           payload: {
             role: message.role,
-            parts: [{
-              type: "file",
-              fileId: part.fileId,
-              filename: part.filename,
-              mediaType: part.mediaType,
-            }],
+            parts: [
+              {
+                type: "file",
+                fileId: part.fileId,
+                filename: part.filename,
+                mediaType: part.mediaType,
+              },
+            ],
           },
           native: { source: "ai-sdk", raw: message },
         });

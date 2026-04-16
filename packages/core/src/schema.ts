@@ -116,12 +116,14 @@ export const modelCompletedEventSchema = baseEnvelopeSchema.extend({
     provider: z.string(),
     model: z.string(),
     output: z.unknown().optional(),
-    usage: z.object({
-      inputTokens: z.number().int().nonnegative().optional(),
-      outputTokens: z.number().int().nonnegative().optional(),
-      reasoningTokens: z.number().int().nonnegative().optional(),
-      totalTokens: z.number().int().nonnegative().optional(),
-    }).optional(),
+    usage: z
+      .object({
+        inputTokens: z.number().int().nonnegative().optional(),
+        outputTokens: z.number().int().nonnegative().optional(),
+        reasoningTokens: z.number().int().nonnegative().optional(),
+        totalTokens: z.number().int().nonnegative().optional(),
+      })
+      .optional(),
     latencyMs: z.number().nonnegative().optional(),
   }),
 });

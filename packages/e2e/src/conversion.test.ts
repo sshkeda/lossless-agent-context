@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { importAiSdkMessages, type AiSdkMessageLike } from "@lossless-agent-context/adapters";
-import { canonicalEventSchema, type CanonicalEvent } from "@lossless-agent-context/core";
+import { type AiSdkMessageLike, importAiSdkMessages } from "@lossless-agent-context/adapters";
+import { type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { toAiSdkMessageProjection, uiMessageProjectionSchema } from "@lossless-agent-context/projection-ai-sdk";
 import { describe, expect, it } from "vitest";
 import { conversionCases } from "./cases";
@@ -75,7 +75,10 @@ describe("conversion corpus e2e", () => {
     it(`is projection-roundtrip stable for ${testCase.name}`, () => {
       const events = testCase.importToCanonical(fixture(testCase.fixtureFile));
       const firstProjection = uiMessageProjectionSchema.array().parse(toAiSdkMessageProjection(events));
-      const roundTrippedEvents = importAiSdkMessages(firstProjection as AiSdkMessageLike[], `${testCase.name}-roundtrip`);
+      const roundTrippedEvents = importAiSdkMessages(
+        firstProjection as AiSdkMessageLike[],
+        `${testCase.name}-roundtrip`,
+      );
       const secondProjection = uiMessageProjectionSchema.array().parse(toAiSdkMessageProjection(roundTrippedEvents));
 
       expect(stripProjectionIds(secondProjection)).toEqual(stripProjectionIds(firstProjection));

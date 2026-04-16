@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalEventSchema, type CanonicalEvent } from "@lossless-agent-context/core";
+import { type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { openInferenceSpanSchema, toOpenInferenceSpans } from "@lossless-agent-context/projection-openinference";
 import { describe, expect, it } from "vitest";
 import { conversionCases } from "./cases";

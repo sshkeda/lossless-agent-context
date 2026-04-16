@@ -8,7 +8,7 @@ export type ReplayOptions = {
 };
 
 export function replayTimeline(events: CanonicalEvent[], options: ReplayOptions): CanonicalEvent[] {
-  const sessionEvents = events.filter(event => event.sessionId === options.sessionId);
+  const sessionEvents = events.filter((event) => event.sessionId === options.sessionId);
   const branchCreatedByBranchId = new Map<string, CanonicalEvent>();
   const eventById = new Map<string, CanonicalEvent>();
 
@@ -22,7 +22,7 @@ export function replayTimeline(events: CanonicalEvent[], options: ReplayOptions)
   const lineage = resolveBranchLineage(options.branchId, branchCreatedByBranchId);
   const replayed = lineage.flatMap((branchId, index) => {
     const branchEvents = sessionEvents
-      .filter(event => event.branchId === branchId)
+      .filter((event) => event.branchId === branchId)
       .sort((left, right) => left.seq - right.seq);
 
     const childBranchId = lineage[index + 1];
@@ -40,7 +40,10 @@ export function replayTimeline(events: CanonicalEvent[], options: ReplayOptions)
       return maybeTruncateByCursor(branchEvents, options.cursorEventId);
     }
 
-    return maybeTruncateByCursor(branchEvents.filter(event => event.seq <= forkSource.seq), options.cursorEventId);
+    return maybeTruncateByCursor(
+      branchEvents.filter((event) => event.seq <= forkSource.seq),
+      options.cursorEventId,
+    );
   });
 
   return dedupeByEventId(replayed).sort(compareTimeline);
@@ -57,9 +60,7 @@ function resolveBranchLineage(branchId: string, branchCreatedByBranchId: Map<str
   while (currentBranchId) {
     lineage.unshift(currentBranchId);
     const marker = branchCreatedByBranchId.get(currentBranchId);
-    currentBranchId = marker && marker.kind === "branch.created"
-      ? marker.payload.fromBranchId
-      : undefined;
+    currentBranchId = marker && marker.kind === "branch.created" ? marker.payload.fromBranchId : undefined;
   }
 
   return lineage;
@@ -67,7 +68,7 @@ function resolveBranchLineage(branchId: string, branchCreatedByBranchId: Map<str
 
 function maybeTruncateByCursor(events: CanonicalEvent[], cursorEventId?: string): CanonicalEvent[] {
   if (!cursorEventId) return events;
-  const cursorIndex = events.findIndex(event => event.eventId === cursorEventId);
+  const cursorIndex = events.findIndex((event) => event.eventId === cursorEventId);
   return cursorIndex === -1 ? events : events.slice(0, cursorIndex + 1);
 }
 

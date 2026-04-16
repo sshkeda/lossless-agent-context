@@ -1,3 +1,4 @@
+export type { CanonicalEvent, ContentPart } from "./schema";
 export {
   actorSchema,
   baseEnvelopeSchema,
@@ -17,5 +18,3 @@ export {
   toolCallEventSchema,
   toolResultEventSchema,
 } from "./schema";
-
-export type { CanonicalEvent, ContentPart } from "./schema";

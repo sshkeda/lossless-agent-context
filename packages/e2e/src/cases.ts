@@ -1,5 +1,11 @@
+import {
+  type AiSdkMessageLike,
+  importAiSdkMessages,
+  importClaudeCodeJsonl,
+  importCodexJsonl,
+  importPiSessionJsonl,
+} from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { importAiSdkMessages, importClaudeCodeJsonl, importCodexJsonl, importPiSessionJsonl, type AiSdkMessageLike } from "@lossless-agent-context/adapters";
 
 export type FixtureKind = "jsonl" | "json";
 
@@ -33,7 +39,7 @@ export const conversionCases: ConversionCase[] = [
     name: "ai-sdk",
     fixtureFile: "ai-sdk.json",
     fixtureKind: "json",
-    importToCanonical: input => {
+    importToCanonical: (input) => {
       const messages = JSON.parse(input) as AiSdkMessageLike[];
       return importAiSdkMessages(messages, "ai-sdk-session-1");
     },

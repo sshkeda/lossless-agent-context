@@ -1,5 +1,5 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { DEFAULT_BRANCH_ID, createEvent, toIsoTimestamp } from "./utils";
+import { createEvent, DEFAULT_BRANCH_ID, toIsoTimestamp } from "./utils";
 
 export type ClaudePrintResult = {
   type: string;
@@ -16,7 +16,11 @@ export type ClaudePrintResult = {
   [key: string]: unknown;
 };
 
-export function importClaudePrintResult(result: ClaudePrintResult, prompt: string, timestamp = new Date().toISOString()): CanonicalEvent[] {
+export function importClaudePrintResult(
+  result: ClaudePrintResult,
+  prompt: string,
+  timestamp = new Date().toISOString(),
+): CanonicalEvent[] {
   const events: CanonicalEvent[] = [];
   const sessionId = result.session_id ?? `claude-print-${crypto.randomUUID?.() ?? "session"}`;
   const branchId = DEFAULT_BRANCH_ID;

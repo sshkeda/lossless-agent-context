@@ -1,5 +1,5 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { DEFAULT_BRANCH_ID, createEvent, toIsoTimestamp } from "./utils";
+import { createEvent, DEFAULT_BRANCH_ID, toIsoTimestamp } from "./utils";
 
 export type OpenAIChatCompletionTrace = {
   sessionId: string;
@@ -78,8 +78,11 @@ export function importOpenAIChatCompletionTrace(trace: OpenAIChatCompletionTrace
   }
 
   const assistantMessages = (trace.response.choices ?? [])
-    .map(choice => choice.message)
-    .filter((message): message is { role?: "assistant" | "user" | "system" | "tool"; content?: string | null } => message != null);
+    .map((choice) => choice.message)
+    .filter(
+      (message): message is { role?: "assistant" | "user" | "system" | "tool"; content?: string | null } =>
+        message != null,
+    );
 
   for (const message of assistantMessages) {
     if (message.content) {
@@ -121,4 +124,3 @@ export function importOpenAIChatCompletionTrace(trace: OpenAIChatCompletionTrace
 
   return events;
 }
-

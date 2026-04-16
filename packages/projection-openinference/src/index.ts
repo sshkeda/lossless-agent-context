@@ -1,8 +1,8 @@
 import type { CanonicalEvent, ContentPart } from "@lossless-agent-context/core";
 import { openInferenceSpanSchema } from "./schema";
 
-export { openInferenceSpanSchema } from "./schema";
 export type { OpenInferenceSpan } from "./schema";
+export { openInferenceSpanSchema } from "./schema";
 
 export function toOpenInferenceSpans(events: CanonicalEvent[]) {
   return events.map((event, index) =>
@@ -124,21 +124,25 @@ function spanKindForEvent(event: CanonicalEvent): string {
   }
 }
 
+function partToString(part: ContentPart): string {
+  switch (part.type) {
+    case "text":
+      return part.text;
+    case "file":
+      return JSON.stringify({
+        fileId: part.fileId,
+        filename: part.filename ?? null,
+        mediaType: part.mediaType ?? null,
+      });
+    case "image":
+      return JSON.stringify({ imageRef: part.imageRef, mediaType: part.mediaType ?? null });
+    case "json":
+      return JSON.stringify(part.value);
+  }
+}
+
 function stringifyParts(parts: ContentPart[]): string {
-  return parts
-    .map(part => {
-      switch (part.type) {
-        case "text":
-          return part.text;
-        case "file":
-          return JSON.stringify({ fileId: part.fileId, filename: part.filename ?? null, mediaType: part.mediaType ?? null });
-        case "image":
-          return JSON.stringify({ imageRef: part.imageRef, mediaType: part.mediaType ?? null });
-        case "json":
-          return JSON.stringify(part.value);
-      }
-    })
-    .join("\n");
+  return parts.map(partToString).join("\n");
 }
 
 function safeJson(value: unknown): string | null {

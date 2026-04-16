@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { canonicalEventSchema, type CanonicalEvent } from "@lossless-agent-context/core";
+import { type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { replayFromCursor, replayTimeline } from "@lossless-agent-context/replay";
 import { describe, expect, it } from "vitest";
 
@@ -9,7 +9,7 @@ function fixture<T>(name: string): T {
 }
 
 function eventIds(events: CanonicalEvent[]): string[] {
-  return events.map(event => event.eventId);
+  return events.map((event) => event.eventId);
 }
 
 describe("replay engine e2e", () => {

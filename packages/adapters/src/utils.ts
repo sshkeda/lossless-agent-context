@@ -6,9 +6,9 @@ export const DEFAULT_BRANCH_ID = "main";
 export function parseJsonl(text: string): unknown[] {
   return text
     .split(/\r?\n/)
-    .map(line => line.trim())
+    .map((line) => line.trim())
     .filter(Boolean)
-    .map(line => JSON.parse(line));
+    .map((line) => JSON.parse(line));
 }
 
 export function toIsoTimestamp(value: unknown): string {
@@ -81,20 +81,24 @@ function contentPartsFromUnknownPart(value: unknown): ContentPart[] {
   }
 
   if (type === "image" && typeof record.data === "string") {
-    return [{
-      type: "image",
-      imageRef: record.data,
-      mediaType: typeof record.mimeType === "string" ? record.mimeType : undefined,
-    }];
+    return [
+      {
+        type: "image",
+        imageRef: record.data,
+        mediaType: typeof record.mimeType === "string" ? record.mimeType : undefined,
+      },
+    ];
   }
 
   if (type === "file") {
-    return [{
-      type: "file",
-      fileId: typeof record.fileId === "string" ? record.fileId : "unknown-file",
-      filename: typeof record.filename === "string" ? record.filename : undefined,
-      mediaType: typeof record.mediaType === "string" ? record.mediaType : undefined,
-    }];
+    return [
+      {
+        type: "file",
+        fileId: typeof record.fileId === "string" ? record.fileId : "unknown-file",
+        filename: typeof record.filename === "string" ? record.filename : undefined,
+        mediaType: typeof record.mediaType === "string" ? record.mediaType : undefined,
+      },
+    ];
   }
 
   return [{ type: "json", value: record }];
