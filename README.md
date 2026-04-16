@@ -43,6 +43,9 @@ bun run test
 - Codex JSONL -> canonical events
 - AI SDK-style messages -> canonical events
 - canonical events -> AI SDK-style message projection
+- canonical events -> Pi / Claude Code / Codex JSONL (native exporters)
+- cross-provider conversion (e.g. Pi -> Claude Code) with lossless `__lac_foreign` envelope carry-through
+- semantic Pi -> Claude Code export validated by the real `@anthropic-ai/claude-agent-sdk` (`getSessionMessages` parses converted output, returning the original Pi user/assistant chain)
 
 ## Testing philosophy
 
@@ -57,6 +60,9 @@ Implemented today:
 - branch-aware replay e2e
 - env-gated real local log import tests
 - env-gated live provider smoke e2e via local authenticated `claude`, `codex`, and `pi` CLIs
+- provider-roundtrip e2e (native ↔ canonical lossless per provider)
+- cross-provider e2e (provider A -> provider B -> provider A lossless via foreign envelopes)
+- sdk-validation e2e (real `@anthropic-ai/claude-agent-sdk` reads our Pi -> Claude conversion via `getSessionMessages`)
 
 Planned and tracked explicitly for the future system:
 - none in the current matrix

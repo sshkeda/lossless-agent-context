@@ -1,11 +1,25 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { DEFAULT_BRANCH_ID, createEvent, parseJsonl, safeJsonParse, toIsoTimestamp } from "./utils";
+import { FOREIGN_FIELD, isForeignLine, readForeignEnvelope, reimportForeignRaw, rewriteIds } from "./cross-provider";
+import { createEvent, DEFAULT_BRANCH_ID, parseJsonl, safeJsonParse, toIsoTimestamp } from "./utils";
+
+type NativeRef = { source: string; raw: unknown };
+
+function nativeForLine(line: Record<string, unknown>): NativeRef {
+  const sidecar = line[FOREIGN_FIELD];
+  if (sidecar && typeof sidecar === "object" && !Array.isArray(sidecar)) {
+    const record = sidecar as Record<string, unknown>;
+    if (typeof record.source === "string") {
+      return { source: record.source, raw: record.raw };
+    }
+  }
+  return { source: "codex", raw: line };
+}
 
 export function importCodexJsonl(text: string): CanonicalEvent[] {
   const lines = parseJsonl(text) as Array<Record<string, unknown>>;
   const events: CanonicalEvent[] = [];
 
-  const sessionMeta = lines.find(line => line.type === "session_meta") as Record<string, unknown> | undefined;
+  const sessionMeta = lines.find((line) => line.type === "session_meta") as Record<string, unknown> | undefined;
   const payload = sessionMeta?.payload as Record<string, unknown> | undefined;
   const sessionId = typeof payload?.id === "string" ? payload.id : "codex-session";
   const branchId = DEFAULT_BRANCH_ID;
@@ -21,12 +35,24 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
         workingDirectory: typeof payload.cwd === "string" ? payload.cwd : undefined,
         provider: typeof payload.model_provider === "string" ? payload.model_provider : undefined,
       },
-      native: { source: "codex", raw: sessionMeta },
+      native: nativeForLine(sessionMeta),
     });
   }
 
   for (const line of lines) {
+    if (isForeignLine(line)) {
+      const envelope = readForeignEnvelope(line);
+      if (envelope) {
+        const foreign = reimportForeignRaw(envelope);
+        const rewritten = rewriteIds(foreign, sessionId, branchId, events.length);
+        for (const event of rewritten) events.push(event);
+        continue;
+      }
+    }
+
     if (line.type === "session_meta") continue;
+
+    const native = nativeForLine(line);
 
     if (line.type === "response_item") {
       const item = line.payload as Record<string, unknown> | undefined;
@@ -49,7 +75,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
                 role: role === "assistant" ? "assistant" : "user",
                 parts: [{ type: "text", text: record.text }],
               },
-              native: { source: "codex", raw: line },
+              native,
             });
           }
         }
@@ -59,7 +85,11 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
       if (item.type === "reasoning") {
         const summary = Array.isArray(item.summary) ? item.summary : [];
         const text = summary
-          .map(part => (part && typeof part === "object" && (part as Record<string, unknown>).type === "summary_text" ? (part as Record<string, unknown>).text : undefined))
+          .map((part) =>
+            part && typeof part === "object" && (part as Record<string, unknown>).type === "summary_text"
+              ? (part as Record<string, unknown>).text
+              : undefined,
+          )
           .filter((value): value is string => typeof value === "string")
           .join("\n\n");
 
@@ -74,7 +104,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
             text: text || undefined,
             providerExposed: true,
           },
-          native: { source: "codex", raw: line },
+          native,
         });
         continue;
       }
@@ -94,7 +124,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
             name: typeof item.name === "string" ? item.name : "unknown-tool",
             arguments: typeof item.arguments === "string" ? safeJsonParse(item.arguments) : item.arguments,
           },
-          native: { source: "codex", raw: line },
+          native,
         });
         continue;
       }
@@ -111,7 +141,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
             output: item.output,
             isError: false,
           },
-          native: { source: "codex", raw: line },
+          native,
         });
         continue;
       }
@@ -129,7 +159,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
           kind: "message.created",
           actor: { type: "assistant" },
           payload: { role: "assistant", parts: [{ type: "text", text: item.message }] },
-          native: { source: "codex", raw: line },
+          native,
         });
         continue;
       }
@@ -146,7 +176,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
             text: item.text,
             providerExposed: true,
           },
-          native: { source: "codex", raw: line },
+          native,
         });
         continue;
       }
@@ -162,7 +192,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
         eventType: typeof line.type === "string" ? line.type : "unknown",
         raw: line,
       },
-      native: { source: "codex", raw: line },
+      native,
     });
   }
 

@@ -4,7 +4,7 @@
 
 ## Domains
 
-The repo tracks six required e2e domains:
+The repo tracks nine required e2e domains:
 
 1. `fixture-corpus`
    - committed fixtures from supported source formats
@@ -15,11 +15,20 @@ The repo tracks six required e2e domains:
 3. `projection-roundtrip`
    - canonical -> projection -> canonical -> projection stability
 4. `replay-engine`
-   - future replay/checkpoint/fork runtime tests
+   - replay/checkpoint/fork runtime tests
 5. `openinference-export`
-   - future canonical -> OpenInference / OTEL exporter tests
+   - canonical -> OpenInference / OTEL exporter tests
 6. `live-provider-smoke`
-   - future live provider smoke tests behind env flags
+   - live provider smoke tests behind env flags
+7. `provider-roundtrip`
+   - native -> canonical -> native byte/semantic equivalence per provider
+   - importer regression guard (every source line referenced by canonical event)
+8. `cross-provider`
+   - native A -> canonical -> native B -> canonical -> native A byte equivalence
+   - foreign envelope carry-through under `__lac_foreign`
+   - semantic Pi -> Claude exporter (real Claude line shapes with `__lac_foreign` sidecar)
+9. `sdk-validation`
+   - real `@anthropic-ai/claude-agent-sdk` parses the Pi -> Claude conversion via `getSessionMessages`
 
 ## What exists today
 
@@ -30,6 +39,9 @@ Implemented now:
 - OpenInference exporter e2e
 - replay engine e2e
 - live provider smoke e2e (env-gated)
+- provider-roundtrip e2e (lossless same-provider native ↔ canonical)
+- cross-provider e2e (lossless cross-provider conversion via `__lac_foreign` envelopes, plus semantic Pi -> Claude with sidecar)
+- sdk-validation e2e (real Claude Agent SDK reads our converted output)
 
 Planned for future subsystems:
 - none in the current matrix

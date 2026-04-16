@@ -1,11 +1,25 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { DEFAULT_BRANCH_ID, contentPartsFromUnknown, createEvent, parseJsonl, toIsoTimestamp } from "./utils";
+import { FOREIGN_FIELD, isForeignLine, readForeignEnvelope, reimportForeignRaw, rewriteIds } from "./cross-provider";
+import { contentPartsFromUnknown, createEvent, DEFAULT_BRANCH_ID, parseJsonl, toIsoTimestamp } from "./utils";
+
+type NativeRef = { source: string; raw: unknown };
+
+function nativeForLine(line: Record<string, unknown>): NativeRef {
+  const sidecar = line[FOREIGN_FIELD];
+  if (sidecar && typeof sidecar === "object" && !Array.isArray(sidecar)) {
+    const record = sidecar as Record<string, unknown>;
+    if (typeof record.source === "string") {
+      return { source: record.source, raw: record.raw };
+    }
+  }
+  return { source: "pi", raw: line };
+}
 
 export function importPiSessionJsonl(text: string): CanonicalEvent[] {
   const lines = parseJsonl(text) as Array<Record<string, unknown>>;
   const events: CanonicalEvent[] = [];
 
-  const sessionHeader = lines.find(line => line.type === "session") as Record<string, unknown> | undefined;
+  const sessionHeader = lines.find((line) => line.type === "session") as Record<string, unknown> | undefined;
   const sessionId = typeof sessionHeader?.id === "string" ? sessionHeader.id : "pi-session";
   const branchId = DEFAULT_BRANCH_ID;
 
@@ -19,11 +33,23 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
         startedAt: toIsoTimestamp(sessionHeader.timestamp),
         workingDirectory: typeof sessionHeader.cwd === "string" ? sessionHeader.cwd : undefined,
       },
-      native: { source: "pi", raw: sessionHeader },
+      native: nativeForLine(sessionHeader),
     });
   }
 
   for (const line of lines) {
+    if (isForeignLine(line)) {
+      const envelope = readForeignEnvelope(line);
+      if (envelope) {
+        const foreign = reimportForeignRaw(envelope);
+        const rewritten = rewriteIds(foreign, sessionId, branchId, events.length);
+        for (const event of rewritten) events.push(event);
+        continue;
+      }
+    }
+
+    const native = nativeForLine(line);
+
     switch (line.type) {
       case "session":
         break;
@@ -37,7 +63,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
             provider: typeof line.provider === "string" ? line.provider : "unknown",
             model: typeof line.modelId === "string" ? line.modelId : "unknown",
           },
-          native: { source: "pi", raw: line },
+          native,
         });
         break;
       }
@@ -55,7 +81,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
               kind: "message.created",
               actor: { type: message.role },
               payload: { role: message.role, parts },
-              native: { source: "pi", raw: line },
+              native,
             });
           }
           break;
@@ -79,7 +105,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
                   text: typeof record.thinking === "string" ? record.thinking : undefined,
                   providerExposed: true,
                 },
-                native: { source: "pi", raw: line },
+                native,
               });
               continue;
             }
@@ -92,7 +118,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
                 kind: "message.created",
                 actor: { type: "assistant" },
                 payload: { role: "assistant", parts: [{ type: "text", text: record.text }] },
-                native: { source: "pi", raw: line },
+                native,
               });
               continue;
             }
@@ -112,7 +138,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
                   name: typeof record.name === "string" ? record.name : "unknown-tool",
                   arguments: record.arguments,
                 },
-                native: { source: "pi", raw: line },
+                native,
               });
             }
           }
@@ -131,7 +157,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
               output: contentPartsFromUnknown(message.content),
               isError: Boolean(message.isError),
             },
-            native: { source: "pi", raw: line },
+            native,
           });
           break;
         }
@@ -146,7 +172,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
             eventType: `message.${message.role}`,
             raw: line,
           },
-          native: { source: "pi", raw: line },
+          native,
         });
         break;
       }
@@ -161,7 +187,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
             eventType: typeof line.type === "string" ? line.type : "unknown",
             raw: line,
           },
-          native: { source: "pi", raw: line },
+          native,
         });
     }
   }

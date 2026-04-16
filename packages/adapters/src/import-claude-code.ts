@@ -1,12 +1,26 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { DEFAULT_BRANCH_ID, contentPartsFromUnknown, createEvent, parseJsonl, toIsoTimestamp } from "./utils";
+import { FOREIGN_FIELD, isForeignLine, readForeignEnvelope, reimportForeignRaw, rewriteIds } from "./cross-provider";
+import { createEvent, DEFAULT_BRANCH_ID, parseJsonl, toIsoTimestamp } from "./utils";
+
+type NativeRef = { source: string; raw: unknown };
+
+function nativeForLine(line: Record<string, unknown>): NativeRef {
+  const sidecar = line[FOREIGN_FIELD];
+  if (sidecar && typeof sidecar === "object" && !Array.isArray(sidecar)) {
+    const record = sidecar as Record<string, unknown>;
+    if (typeof record.source === "string") {
+      return { source: record.source, raw: record.raw };
+    }
+  }
+  return { source: "claude-code", raw: line };
+}
 
 export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
   const lines = parseJsonl(text) as Array<Record<string, unknown>>;
   const events: CanonicalEvent[] = [];
 
-  const firstLine = lines[0];
-  const sessionId = typeof firstLine?.sessionId === "string" ? firstLine.sessionId : "claude-session";
+  const firstNativeLine = lines.find((line) => !isForeignLine(line));
+  const sessionId = typeof firstNativeLine?.sessionId === "string" ? firstNativeLine.sessionId : "claude-session";
   const branchId = DEFAULT_BRANCH_ID;
   let createdSession = false;
 
@@ -23,12 +37,23 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
         workingDirectory: typeof line.cwd === "string" ? line.cwd : undefined,
         model: typeof line.version === "string" ? line.version : undefined,
       },
-      native: { source: "claude-code", raw: line },
+      native: nativeForLine(line),
     });
   }
 
   for (const line of lines) {
+    if (isForeignLine(line)) {
+      const envelope = readForeignEnvelope(line);
+      if (envelope) {
+        const foreign = reimportForeignRaw(envelope);
+        const rewritten = rewriteIds(foreign, sessionId, branchId, events.length);
+        for (const event of rewritten) events.push(event);
+        continue;
+      }
+    }
+
     ensureSession(line);
+    const native = nativeForLine(line);
 
     switch (line.type) {
       case "user": {
@@ -42,7 +67,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
             kind: "message.created",
             actor: { type: "user" },
             payload: { role: "user", parts: [{ type: "text", text: content }] },
-            native: { source: "claude-code", raw: line },
+            native,
           });
           break;
         }
@@ -64,7 +89,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                   output: record.content,
                   isError: Boolean(record.is_error),
                 },
-                native: { source: "claude-code", raw: line },
+                native,
               });
               continue;
             }
@@ -77,7 +102,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 kind: "message.created",
                 actor: { type: "user" },
                 payload: { role: "user", parts: [{ type: "text", text: record.text }] },
-                native: { source: "claude-code", raw: line },
+                native,
               });
             }
           }
@@ -105,7 +130,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 providerExposed: true,
               },
               extensions: typeof record.signature === "string" ? { signature: record.signature } : undefined,
-              native: { source: "claude-code", raw: line },
+              native,
             });
             continue;
           }
@@ -118,7 +143,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
               kind: "message.created",
               actor: { type: "assistant" },
               payload: { role: "assistant", parts: [{ type: "text", text: record.text }] },
-              native: { source: "claude-code", raw: line },
+              native,
             });
             continue;
           }
@@ -138,7 +163,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 name: typeof record.name === "string" ? record.name : "unknown-tool",
                 arguments: record.input,
               },
-              native: { source: "claude-code", raw: line },
+              native,
             });
           }
         }
@@ -155,7 +180,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
             eventType: typeof line.type === "string" ? line.type : "unknown",
             raw: line,
           },
-          native: { source: "claude-code", raw: line },
+          native,
         });
     }
   }
