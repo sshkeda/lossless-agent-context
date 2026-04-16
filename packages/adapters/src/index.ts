@@ -1,5 +1,9 @@
 export { importAiSdkMessages } from "./import-ai-sdk";
 export type { AiSdkMessageLike } from "./import-ai-sdk";
+export { importAnthropicMessageTrace } from "./import-anthropic";
+export type { AnthropicMessageTrace } from "./import-anthropic";
 export { importClaudeCodeJsonl } from "./import-claude-code";
 export { importCodexJsonl } from "./import-codex";
+export { importOpenAIChatCompletionTrace } from "./import-openai";
+export type { OpenAIChatCompletionTrace } from "./import-openai";
 export { importPiSessionJsonl } from "./import-pi";

@@ -29,9 +29,10 @@ Implemented now:
 - real local log e2e harness (env-gated)
 - OpenInference exporter e2e
 - replay engine e2e
+- live provider smoke e2e (env-gated)
 
 Planned for future subsystems:
-- live provider smoke e2e
+- none in the current matrix
 
 ## Commands
 
@@ -48,6 +49,17 @@ LAC_ENABLE_REAL_LOG_E2E=1 \
 LAC_REAL_PI_SESSION=~/.pi/agent/sessions/...jsonl \
 LAC_REAL_CLAUDE_SESSION=~/.claude/projects/...jsonl \
 LAC_REAL_CODEX_SESSION=~/.codex/archived_sessions/...jsonl \
+bun run test
+```
+
+Run live provider smoke e2e:
+
+```bash
+LAC_ENABLE_LIVE_PROVIDER_E2E=1 \
+OPENAI_API_KEY=... \
+ANTHROPIC_API_KEY=... \
+LAC_OPENAI_MODEL=gpt-4.1-mini \
+LAC_ANTHROPIC_MODEL=claude-3-5-haiku-latest \
 bun run test
 ```
 

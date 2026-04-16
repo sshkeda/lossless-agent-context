@@ -56,8 +56,9 @@ Implemented today:
 - projection round-trip stability checks
 - branch-aware replay e2e
 - env-gated real local log import tests
+- env-gated live provider smoke e2e
 
 Planned and tracked explicitly for the future system:
-- live-provider smoke e2e
+- none in the current matrix
 
 See [TESTING.md](./TESTING.md) for the full matrix.

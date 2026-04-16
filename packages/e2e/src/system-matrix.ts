@@ -71,7 +71,7 @@ export const systemE2EMatrix: DomainEntry[] = [
   },
   {
     domain: "live-provider-smoke",
-    status: "planned",
+    status: "implemented",
     coverage: [
       "provider-native event ingestion from live runs",
       "cross-provider semantic equivalence smoke tests",
