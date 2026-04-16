@@ -1,0 +1,31 @@
+[
+  {
+    "id": "m1",
+    "role": "user",
+    "parts": [
+      { "type": "text", "text": "Find the project README" }
+    ]
+  },
+  {
+    "id": "m2",
+    "role": "assistant",
+    "parts": [
+      { "type": "reasoning", "text": "I should inspect the repository root." },
+      { "type": "tool-call", "toolCallId": "tc1", "toolName": "read", "input": { "path": "README.md" } }
+    ]
+  },
+  {
+    "id": "m3",
+    "role": "tool",
+    "parts": [
+      { "type": "tool-result", "toolCallId": "tc1", "output": "# README", "isError": false }
+    ]
+  },
+  {
+    "id": "m4",
+    "role": "assistant",
+    "parts": [
+      { "type": "text", "text": "I found the README." }
+    ]
+  }
+]

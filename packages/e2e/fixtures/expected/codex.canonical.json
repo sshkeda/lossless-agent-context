@@ -1,0 +1,73 @@
+[
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "codex-session-1:000000",
+    "sessionId": "codex-session-1",
+    "branchId": "main",
+    "seq": 0,
+    "timestamp": "2026-03-23T13:37:28.689Z",
+    "native": { "source": "codex", "raw": { "timestamp": "2026-03-23T13:37:28.689Z", "type": "session_meta", "payload": { "id": "codex-session-1", "timestamp": "2026-03-23T13:19:01.660Z", "cwd": "/tmp/lossless-agent-context", "model_provider": "openai" } } },
+    "kind": "session.created",
+    "payload": { "provider": "openai", "startedAt": "2026-03-23T13:19:01.660Z", "workingDirectory": "/tmp/lossless-agent-context" }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "codex-session-1:000001",
+    "sessionId": "codex-session-1",
+    "branchId": "main",
+    "seq": 1,
+    "timestamp": "2026-03-23T13:37:28.692Z",
+    "actor": { "type": "user" },
+    "native": { "source": "codex", "raw": { "timestamp": "2026-03-23T13:37:28.692Z", "type": "response_item", "payload": { "type": "message", "role": "user", "content": [{ "type": "input_text", "text": "say goodmorning with some thoughtful advice" }] } } },
+    "kind": "message.created",
+    "payload": { "role": "user", "parts": [{ "type": "text", "text": "say goodmorning with some thoughtful advice" }] }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "codex-session-1:000002",
+    "sessionId": "codex-session-1",
+    "branchId": "main",
+    "seq": 2,
+    "timestamp": "2026-03-23T15:41:07.911Z",
+    "actor": { "type": "assistant" },
+    "native": { "source": "codex", "raw": { "timestamp": "2026-03-23T15:41:07.911Z", "type": "response_item", "payload": { "type": "reasoning", "summary": [{ "type": "summary_text", "text": "Planning automation process" }] } } },
+    "kind": "reasoning.created",
+    "payload": { "visibility": "summary", "text": "Planning automation process", "providerExposed": true }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "codex-session-1:000003",
+    "sessionId": "codex-session-1",
+    "branchId": "main",
+    "seq": 3,
+    "timestamp": "2026-03-23T15:41:08.329Z",
+    "actor": { "type": "assistant", "toolName": "exec_command" },
+    "native": { "source": "codex", "raw": { "timestamp": "2026-03-23T15:41:08.329Z", "type": "response_item", "payload": { "type": "function_call", "name": "exec_command", "arguments": "{\"cmd\":\"echo hello\"}", "call_id": "call_abc123" } } },
+    "kind": "tool.call",
+    "payload": { "toolCallId": "call_abc123", "name": "exec_command", "arguments": { "cmd": "echo hello" } }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "codex-session-1:000004",
+    "sessionId": "codex-session-1",
+    "branchId": "main",
+    "seq": 4,
+    "timestamp": "2026-03-23T15:41:08.398Z",
+    "actor": { "type": "tool" },
+    "native": { "source": "codex", "raw": { "timestamp": "2026-03-23T15:41:08.398Z", "type": "response_item", "payload": { "type": "function_call_output", "call_id": "call_abc123", "output": "Command: /bin/zsh -lc 'echo hello'\nOutput:\nhello\n" } } },
+    "kind": "tool.result",
+    "payload": { "toolCallId": "call_abc123", "output": "Command: /bin/zsh -lc 'echo hello'\nOutput:\nhello\n", "isError": false }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "codex-session-1:000005",
+    "sessionId": "codex-session-1",
+    "branchId": "main",
+    "seq": 5,
+    "timestamp": "2026-03-23T15:56:14.908Z",
+    "actor": { "type": "assistant" },
+    "native": { "source": "codex", "raw": { "timestamp": "2026-03-23T15:56:14.908Z", "type": "event_msg", "payload": { "type": "agent_message", "message": "I found no existing memory for this automation." } } },
+    "kind": "message.created",
+    "payload": { "role": "assistant", "parts": [{ "type": "text", "text": "I found no existing memory for this automation." }] }
+  }
+]

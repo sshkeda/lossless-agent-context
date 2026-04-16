@@ -1,110 +1,84 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { importAiSdkMessages, importClaudeCodeJsonl, importCodexJsonl, importPiSessionJsonl, type AiSdkMessageLike } from "@lossless-agent-context/adapters";
-import { canonicalEventSchema } from "@lossless-agent-context/core";
+import { importAiSdkMessages, type AiSdkMessageLike } from "@lossless-agent-context/adapters";
+import { canonicalEventSchema, type CanonicalEvent } from "@lossless-agent-context/core";
 import { toAiSdkMessageProjection, uiMessageProjectionSchema } from "@lossless-agent-context/projection-ai-sdk";
 import { describe, expect, it } from "vitest";
+import { conversionCases } from "./cases";
 
 function fixture(name: string): string {
   return readFileSync(join(process.cwd(), "fixtures", name), "utf8");
 }
 
-describe("conversion e2e", () => {
-  it("converts Pi session JSONL into canonical events and AI SDK projection", () => {
-    const events = importPiSessionJsonl(fixture("pi.jsonl"));
-    expect(canonicalEventSchema.array().parse(events)).toHaveLength(6);
-    expect(events.map(event => event.kind)).toEqual([
-      "session.created",
-      "model.selected",
-      "message.created",
-      "reasoning.created",
-      "tool.call",
-      "tool.result",
-    ]);
+function expectedJson<T>(name: string): T {
+  return JSON.parse(readFileSync(join(process.cwd(), "fixtures", "expected", name), "utf8")) as T;
+}
 
-    const projection = toAiSdkMessageProjection(events);
-    expect(uiMessageProjectionSchema.array().parse(projection)).toHaveLength(4);
-    expect(projection.map(message => message.role)).toEqual(["user", "assistant", "assistant", "tool"]);
-  });
+function stripProjectionIds(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(stripProjectionIds);
+  }
 
-  it("converts Claude Code JSONL into canonical events and AI SDK projection", () => {
-    const events = importClaudeCodeJsonl(fixture("claude-code.jsonl"));
-    expect(canonicalEventSchema.array().parse(events)).toHaveLength(8);
-    expect(events.map(event => event.kind)).toEqual([
-      "session.created",
-      "provider.event",
-      "message.created",
-      "reasoning.created",
-      "message.created",
-      "tool.call",
-      "tool.result",
-      "message.created",
-    ]);
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([key]) => key !== "id")
+      .map(([key, nestedValue]) => [key, stripProjectionIds(nestedValue)]);
+    return Object.fromEntries(entries);
+  }
 
-    const projection = toAiSdkMessageProjection(events);
-    expect(uiMessageProjectionSchema.array().parse(projection)).toHaveLength(6);
-    expect(projection.map(message => message.role)).toEqual(["user", "assistant", "assistant", "assistant", "tool", "assistant"]);
-  });
+  return value;
+}
 
-  it("converts Codex JSONL into canonical events and AI SDK projection", () => {
-    const events = importCodexJsonl(fixture("codex.jsonl"));
-    expect(canonicalEventSchema.array().parse(events)).toHaveLength(6);
-    expect(events.map(event => event.kind)).toEqual([
-      "session.created",
-      "message.created",
-      "reasoning.created",
-      "tool.call",
-      "tool.result",
-      "message.created",
-    ]);
+function assertCanonicalInvariants(events: CanonicalEvent[]): void {
+  expect(events.length).toBeGreaterThan(0);
 
-    const projection = toAiSdkMessageProjection(events);
-    expect(uiMessageProjectionSchema.array().parse(projection)).toHaveLength(5);
-    expect(projection.map(message => message.role)).toEqual(["user", "assistant", "assistant", "tool", "assistant"]);
-  });
+  const eventIds = new Set<string>();
+  let previousSeq = -1;
+  let sessionId: string | undefined;
+  let branchId: string | undefined;
 
-  it("converts AI SDK-style messages into canonical events and back into projection messages", () => {
-    const messages: AiSdkMessageLike[] = [
-      {
-        id: "m1",
-        role: "user",
-        parts: [{ type: "text", text: "Find the project README" }],
-      },
-      {
-        id: "m2",
-        role: "assistant",
-        parts: [
-          { type: "reasoning", text: "I should inspect the repository root." },
-          { type: "tool-call", toolCallId: "tc1", toolName: "read", input: { path: "README.md" } },
-        ],
-      },
-      {
-        id: "m3",
-        role: "tool",
-        parts: [{ type: "tool-result", toolCallId: "tc1", output: "# README", isError: false }],
-      },
-      {
-        id: "m4",
-        role: "assistant",
-        parts: [{ type: "text", text: "I found the README." }],
-      },
-    ];
+  for (const event of events) {
+    expect(event.schemaVersion).toBe("0.0.1");
+    expect(event.seq).toBeGreaterThan(previousSeq);
+    previousSeq = event.seq;
 
-    const events = importAiSdkMessages(messages, "ai-sdk-session-1");
-    expect(canonicalEventSchema.array().parse(events)).toHaveLength(6);
-    expect(events.map(event => event.kind)).toEqual([
-      "session.created",
-      "message.created",
-      "reasoning.created",
-      "tool.call",
-      "tool.result",
-      "message.created",
-    ]);
+    expect(eventIds.has(event.eventId)).toBe(false);
+    eventIds.add(event.eventId);
 
-    const projection = toAiSdkMessageProjection(events);
-    expect(uiMessageProjectionSchema.array().parse(projection)).toHaveLength(5);
-    expect(projection[0]?.parts[0]).toEqual({ type: "text", text: "Find the project README" });
-    expect(projection[2]?.parts[0]).toEqual({ type: "tool-call", toolCallId: "tc1", toolName: "read", input: { path: "README.md" } });
-    expect(projection[3]?.parts[0]).toEqual({ type: "tool-result", toolCallId: "tc1", output: "# README", isError: false });
-  });
+    if (!sessionId) sessionId = event.sessionId;
+    if (!branchId) branchId = event.branchId;
+
+    expect(event.sessionId).toBe(sessionId);
+    expect(event.branchId).toBe(branchId);
+  }
+}
+
+describe("conversion corpus e2e", () => {
+  for (const testCase of conversionCases) {
+    it(`matches golden canonical output for ${testCase.name}`, () => {
+      const events = testCase.importToCanonical(fixture(testCase.fixtureFile));
+      const parsed = canonicalEventSchema.array().parse(events);
+      const expected = expectedJson<CanonicalEvent[]>(`${testCase.name}.canonical.json`);
+
+      assertCanonicalInvariants(parsed);
+      expect(parsed).toEqual(expected);
+    });
+
+    it(`matches golden AI SDK projection output for ${testCase.name}`, () => {
+      const events = testCase.importToCanonical(fixture(testCase.fixtureFile));
+      const projection = uiMessageProjectionSchema.array().parse(toAiSdkMessageProjection(events));
+      const expected = expectedJson<ReturnType<typeof toAiSdkMessageProjection>>(`${testCase.name}.projection.json`);
+
+      expect(projection).toEqual(expected);
+    });
+
+    it(`is projection-roundtrip stable for ${testCase.name}`, () => {
+      const events = testCase.importToCanonical(fixture(testCase.fixtureFile));
+      const firstProjection = uiMessageProjectionSchema.array().parse(toAiSdkMessageProjection(events));
+      const roundTrippedEvents = importAiSdkMessages(firstProjection as AiSdkMessageLike[], `${testCase.name}-roundtrip`);
+      const secondProjection = uiMessageProjectionSchema.array().parse(toAiSdkMessageProjection(roundTrippedEvents));
+
+      expect(stripProjectionIds(secondProjection)).toEqual(stripProjectionIds(firstProjection));
+    });
+  }
 });

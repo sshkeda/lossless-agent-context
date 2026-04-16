@@ -1,0 +1,22 @@
+[
+  {
+    "id": "pi-session-1:000002",
+    "role": "user",
+    "parts": [{ "type": "text", "text": "spin up the dev server pls" }]
+  },
+  {
+    "id": "pi-session-1:000003",
+    "role": "assistant",
+    "parts": [{ "type": "reasoning", "text": "Need to start the dev server." }]
+  },
+  {
+    "id": "pi-session-1:000004",
+    "role": "assistant",
+    "parts": [{ "type": "tool-call", "toolCallId": "call_1", "toolName": "ask_claude_code", "input": { "input": "spin up the dev server pls" } }]
+  },
+  {
+    "id": "pi-session-1:000005",
+    "role": "tool",
+    "parts": [{ "type": "tool-result", "toolCallId": "call_1", "output": [{ "type": "text", "text": "{\"output\":\"Dev server is starting\"}" }], "isError": false }]
+  }
+]

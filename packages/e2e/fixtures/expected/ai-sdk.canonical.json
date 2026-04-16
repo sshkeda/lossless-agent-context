@@ -1,0 +1,73 @@
+[
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "ai-sdk-session-1:000000",
+    "sessionId": "ai-sdk-session-1",
+    "branchId": "main",
+    "seq": 0,
+    "timestamp": "1970-01-01T00:00:00.000Z",
+    "native": { "source": "ai-sdk" },
+    "kind": "session.created",
+    "payload": { "title": "AI SDK import", "startedAt": "1970-01-01T00:00:00.000Z" }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "ai-sdk-session-1:000001",
+    "sessionId": "ai-sdk-session-1",
+    "branchId": "main",
+    "seq": 1,
+    "timestamp": "1970-01-01T00:00:00.000Z",
+    "actor": { "type": "user" },
+    "native": { "source": "ai-sdk", "raw": { "id": "m1", "role": "user", "parts": [{ "type": "text", "text": "Find the project README" }] } },
+    "kind": "message.created",
+    "payload": { "role": "user", "parts": [{ "type": "text", "text": "Find the project README" }] }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "ai-sdk-session-1:000002",
+    "sessionId": "ai-sdk-session-1",
+    "branchId": "main",
+    "seq": 2,
+    "timestamp": "1970-01-01T00:00:00.000Z",
+    "actor": { "type": "assistant" },
+    "native": { "source": "ai-sdk", "raw": { "id": "m2", "role": "assistant", "parts": [{ "type": "reasoning", "text": "I should inspect the repository root." }, { "type": "tool-call", "toolCallId": "tc1", "toolName": "read", "input": { "path": "README.md" } }] } },
+    "kind": "reasoning.created",
+    "payload": { "visibility": "summary", "text": "I should inspect the repository root.", "providerExposed": true }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "ai-sdk-session-1:000003",
+    "sessionId": "ai-sdk-session-1",
+    "branchId": "main",
+    "seq": 3,
+    "timestamp": "1970-01-01T00:00:00.000Z",
+    "actor": { "type": "assistant", "toolName": "read" },
+    "native": { "source": "ai-sdk", "raw": { "id": "m2", "role": "assistant", "parts": [{ "type": "reasoning", "text": "I should inspect the repository root." }, { "type": "tool-call", "toolCallId": "tc1", "toolName": "read", "input": { "path": "README.md" } }] } },
+    "kind": "tool.call",
+    "payload": { "toolCallId": "tc1", "name": "read", "arguments": { "path": "README.md" } }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "ai-sdk-session-1:000004",
+    "sessionId": "ai-sdk-session-1",
+    "branchId": "main",
+    "seq": 4,
+    "timestamp": "1970-01-01T00:00:00.000Z",
+    "actor": { "type": "tool" },
+    "native": { "source": "ai-sdk", "raw": { "id": "m3", "role": "tool", "parts": [{ "type": "tool-result", "toolCallId": "tc1", "output": "# README", "isError": false }] } },
+    "kind": "tool.result",
+    "payload": { "toolCallId": "tc1", "output": "# README", "isError": false }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "ai-sdk-session-1:000005",
+    "sessionId": "ai-sdk-session-1",
+    "branchId": "main",
+    "seq": 5,
+    "timestamp": "1970-01-01T00:00:00.000Z",
+    "actor": { "type": "assistant" },
+    "native": { "source": "ai-sdk", "raw": { "id": "m4", "role": "assistant", "parts": [{ "type": "text", "text": "I found the README." }] } },
+    "kind": "message.created",
+    "payload": { "role": "assistant", "parts": [{ "type": "text", "text": "I found the README." }] }
+  }
+]

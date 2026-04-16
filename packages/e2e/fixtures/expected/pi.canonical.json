@@ -1,0 +1,181 @@
+[
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "pi-session-1:000000",
+    "sessionId": "pi-session-1",
+    "branchId": "main",
+    "seq": 0,
+    "timestamp": "2026-04-15T23:29:28.744Z",
+    "native": {
+      "source": "pi",
+      "raw": {
+        "type": "session",
+        "version": 3,
+        "id": "pi-session-1",
+        "timestamp": "2026-04-15T23:29:28.744Z",
+        "cwd": "/tmp/lossless-agent-context"
+      }
+    },
+    "kind": "session.created",
+    "payload": {
+      "startedAt": "2026-04-15T23:29:28.744Z",
+      "workingDirectory": "/tmp/lossless-agent-context"
+    }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "pi-session-1:000001",
+    "sessionId": "pi-session-1",
+    "branchId": "main",
+    "seq": 1,
+    "timestamp": "2026-04-15T23:29:29.133Z",
+    "native": {
+      "source": "pi",
+      "raw": {
+        "type": "model_change",
+        "id": "a3fbf1b9",
+        "parentId": null,
+        "timestamp": "2026-04-15T23:29:29.133Z",
+        "provider": "claude-code",
+        "modelId": "claude-opus-4-6"
+      }
+    },
+    "kind": "model.selected",
+    "payload": {
+      "provider": "claude-code",
+      "model": "claude-opus-4-6"
+    }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "pi-session-1:000002",
+    "sessionId": "pi-session-1",
+    "branchId": "main",
+    "seq": 2,
+    "timestamp": "2026-04-15T23:29:35.645Z",
+    "actor": { "type": "user" },
+    "native": {
+      "source": "pi",
+      "raw": {
+        "type": "message",
+        "id": "e516b1fd",
+        "parentId": "a3fbf1b9",
+        "timestamp": "2026-04-15T23:29:35.652Z",
+        "message": {
+          "role": "user",
+          "content": [{ "type": "text", "text": "spin up the dev server pls" }],
+          "timestamp": 1776295775645
+        }
+      }
+    },
+    "kind": "message.created",
+    "payload": {
+      "role": "user",
+      "parts": [{ "type": "text", "text": "spin up the dev server pls" }]
+    }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "pi-session-1:000003",
+    "sessionId": "pi-session-1",
+    "branchId": "main",
+    "seq": 3,
+    "timestamp": "2026-04-15T23:29:35.652Z",
+    "actor": { "type": "assistant" },
+    "native": {
+      "source": "pi",
+      "raw": {
+        "type": "message",
+        "id": "e8902860",
+        "parentId": "e516b1fd",
+        "timestamp": "2026-04-15T23:29:35.664Z",
+        "message": {
+          "role": "assistant",
+          "content": [
+            { "type": "thinking", "thinking": "Need to start the dev server." },
+            { "type": "toolCall", "id": "call_1", "name": "ask_claude_code", "arguments": { "input": "spin up the dev server pls" } }
+          ],
+          "api": "claude-code-mock-api",
+          "provider": "claude-code",
+          "model": "claude-opus-4-6",
+          "stopReason": "toolUse",
+          "timestamp": 1776295775652
+        }
+      }
+    },
+    "kind": "reasoning.created",
+    "payload": {
+      "visibility": "full",
+      "text": "Need to start the dev server.",
+      "providerExposed": true
+    }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "pi-session-1:000004",
+    "sessionId": "pi-session-1",
+    "branchId": "main",
+    "seq": 4,
+    "timestamp": "2026-04-15T23:29:35.652Z",
+    "actor": { "type": "assistant", "toolName": "ask_claude_code" },
+    "native": {
+      "source": "pi",
+      "raw": {
+        "type": "message",
+        "id": "e8902860",
+        "parentId": "e516b1fd",
+        "timestamp": "2026-04-15T23:29:35.664Z",
+        "message": {
+          "role": "assistant",
+          "content": [
+            { "type": "thinking", "thinking": "Need to start the dev server." },
+            { "type": "toolCall", "id": "call_1", "name": "ask_claude_code", "arguments": { "input": "spin up the dev server pls" } }
+          ],
+          "api": "claude-code-mock-api",
+          "provider": "claude-code",
+          "model": "claude-opus-4-6",
+          "stopReason": "toolUse",
+          "timestamp": 1776295775652
+        }
+      }
+    },
+    "kind": "tool.call",
+    "payload": {
+      "toolCallId": "call_1",
+      "name": "ask_claude_code",
+      "arguments": { "input": "spin up the dev server pls" }
+    }
+  },
+  {
+    "schemaVersion": "0.0.1",
+    "eventId": "pi-session-1:000005",
+    "sessionId": "pi-session-1",
+    "branchId": "main",
+    "seq": 5,
+    "timestamp": "2026-04-15T23:29:46.900Z",
+    "actor": { "type": "tool" },
+    "native": {
+      "source": "pi",
+      "raw": {
+        "type": "message",
+        "id": "936682b7",
+        "parentId": "e8902860",
+        "timestamp": "2026-04-15T23:29:46.900Z",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call_1",
+          "toolName": "ask_claude_code",
+          "content": [{ "type": "text", "text": "{\"output\":\"Dev server is starting\"}" }],
+          "isError": false,
+          "timestamp": 1776295786900
+        }
+      }
+    },
+    "kind": "tool.result",
+    "payload": {
+      "toolCallId": "call_1",
+      "output": [{ "type": "text", "text": "{\"output\":\"Dev server is starting\"}" }],
+      "isError": false
+    }
+  }
+]

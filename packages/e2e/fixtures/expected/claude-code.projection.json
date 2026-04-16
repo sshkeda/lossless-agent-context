@@ -1,0 +1,8 @@
+[
+  { "id": "claude-session-1:000002", "role": "user", "parts": [{ "type": "text", "text": "what is admin creds?" }] },
+  { "id": "claude-session-1:000003", "role": "assistant", "parts": [{ "type": "reasoning", "text": "I should inspect the env docs first." }] },
+  { "id": "claude-session-1:000004", "role": "assistant", "parts": [{ "type": "text", "text": "Let me search the codebase for admin credential references." }] },
+  { "id": "claude-session-1:000005", "role": "assistant", "parts": [{ "type": "tool-call", "toolCallId": "toolu_123", "toolName": "Grep", "input": { "pattern": "admin", "-i": true } }] },
+  { "id": "claude-session-1:000006", "role": "tool", "parts": [{ "type": "tool-result", "toolCallId": "toolu_123", "output": "Found 27 files", "isError": false }] },
+  { "id": "claude-session-1:000007", "role": "assistant", "parts": [{ "type": "text", "text": "The admin credentials are set via environment variables." }] }
+]

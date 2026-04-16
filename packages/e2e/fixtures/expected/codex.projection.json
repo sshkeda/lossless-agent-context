@@ -1,0 +1,7 @@
+[
+  { "id": "codex-session-1:000001", "role": "user", "parts": [{ "type": "text", "text": "say goodmorning with some thoughtful advice" }] },
+  { "id": "codex-session-1:000002", "role": "assistant", "parts": [{ "type": "reasoning", "text": "Planning automation process" }] },
+  { "id": "codex-session-1:000003", "role": "assistant", "parts": [{ "type": "tool-call", "toolCallId": "call_abc123", "toolName": "exec_command", "input": { "cmd": "echo hello" } }] },
+  { "id": "codex-session-1:000004", "role": "tool", "parts": [{ "type": "tool-result", "toolCallId": "call_abc123", "output": "Command: /bin/zsh -lc 'echo hello'\nOutput:\nhello\n", "isError": false }] },
+  { "id": "codex-session-1:000005", "role": "assistant", "parts": [{ "type": "text", "text": "I found no existing memory for this automation." }] }
+]
