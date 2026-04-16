@@ -42,4 +42,18 @@ bun run test
 
 ## Testing philosophy
 
-The `e2e` package uses realistic fixtures and runs full conversion pipelines so regressions show up at the system boundary, not just at the schema unit-test level.
+The `e2e` package is the beginning of the whole-system test harness.
+
+Implemented today:
+- golden fixture corpus e2e
+- exact canonical-output assertions
+- exact AI SDK projection assertions
+- projection round-trip stability checks
+- env-gated real local log import tests
+
+Planned and tracked explicitly for the future system:
+- replay-engine e2e
+- OpenInference / OTEL exporter e2e
+- live-provider smoke e2e
+
+See [TESTING.md](./TESTING.md) for the full matrix.

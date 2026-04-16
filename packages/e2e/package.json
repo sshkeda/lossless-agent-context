@@ -6,7 +6,8 @@
   "scripts": {
     "build": "mkdir -p dist && printf 'ok\n' > dist/.build && tsc --noEmit -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:real-logs": "LAC_ENABLE_REAL_LOG_E2E=1 vitest run src/real-log.test.ts"
   },
   "dependencies": {
     "@lossless-agent-context/adapters": "workspace:*",
