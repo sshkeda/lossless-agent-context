@@ -1,337 +1,287 @@
-import { randomBytes } from "node:crypto";
-import type { CanonicalEvent } from "@lossless-agent-context/core";
+import type { CanonicalEvent, ContentPart } from "@lossless-agent-context/core";
+import { attachClaudeCodeTargetIds, readStoredClaudeCodeIds, readStoredClaudeCodeIdsForGroup } from "./claude-code-ids";
 import {
-  emitSemanticGroupedLines,
+  emitTargetGroupedLines,
   FOREIGN_FIELD,
   type ForeignEnvelope,
   inferSessionIdForTarget,
   inferWorkingDirectory,
+  renderCanonicalEventLine,
 } from "./cross-provider";
+import { PI_SESSION_VERSION } from "./defaults";
+import { deterministicPiId, isoTimestampToEpochMs, stringifyToolOutput } from "./utils";
+
+type PiBlock = Record<string, unknown>;
+type StoredClaudeLineIds = Record<string, unknown> | undefined;
 
 export function exportPiSessionJsonl(events: CanonicalEvent[]): string {
   const sessionId = inferSessionIdForTarget(events, "pi");
   const cwd = inferWorkingDirectory(events);
+  const hasSessionEvent = events.some((event) => event.kind === "session.created");
+  const toolNameByCallId = new Map(
+    events
+      .filter((event): event is Extract<CanonicalEvent, { kind: "tool.call" }> => event.kind === "tool.call")
+      .map((event) => [event.payload.toolCallId, event.payload.name] as const),
+  );
   let parentId: string | null = null;
   let emittedSession = false;
+  let emittedIndex = 0;
 
-  const { lines } = emitSemanticGroupedLines(events, "pi", (source, group, native) => {
-    const piLine =
-      source === "claude-code"
-        ? renderClaudeGroupAsPiLine(group, native.raw, sessionId, cwd, parentId, emittedSession)
-        : source === "codex"
-          ? renderCodexGroupAsPiLine(group, native.raw, sessionId, cwd, parentId, emittedSession)
-          : renderUnknownAsPiLine(source, native.raw, parentId, group[0]?.timestamp);
+  function attachTargetIds(line: Record<string, unknown>, ids: StoredClaudeLineIds): Record<string, unknown> {
+    return attachClaudeCodeTargetIds(line, ids);
+  }
 
-    if (piLine.type === "session") emittedSession = true;
-    const idValue = piLine.id;
+  function nextPiId(label: string, timestamp: string): string {
+    const seed = `${sessionId}:${label}:${timestamp}:${emittedIndex}`;
+    emittedIndex += 1;
+    return deterministicPiId(seed);
+  }
+
+  function makeBase(timestamp: string, sidecar: ForeignEnvelope): Record<string, unknown> {
+    const base: Record<string, unknown> = {
+      id: nextPiId(String(sidecar.source), timestamp),
+      parentId,
+      timestamp,
+    };
+    base[FOREIGN_FIELD] = sidecar;
+    return base;
+  }
+
+  function assistantUsageForGroup(group: CanonicalEvent[]): Record<string, number> {
+    const cache = group.find((event) => event.cache)?.cache;
+    const usage: Record<string, number> = {};
+    if (cache?.totalTokens !== undefined) usage.totalTokens = cache.totalTokens;
+    if (cache?.inputTokens !== undefined) usage.input = cache.inputTokens;
+    if (cache?.outputTokens !== undefined) usage.output = cache.outputTokens;
+    if (cache?.readTokens !== undefined) usage.cacheRead = cache.readTokens;
+    if (cache?.writeTokens !== undefined) usage.cacheWrite = cache.writeTokens;
+    return usage;
+  }
+
+  function emit(line: Record<string, unknown>): Record<string, unknown> {
+    const idValue = line.id;
     if (typeof idValue === "string") parentId = idValue;
-    return piLine;
+    return line;
+  }
+
+  const { lines } = emitTargetGroupedLines(events, "pi", (group, native) => {
+    const first = group[0];
+    if (!first) return null;
+    const ts = first.timestamp;
+    const ms = epochMs(ts);
+    const claudeIds = readStoredClaudeCodeIdsForGroup(group);
+
+    if (first.kind === "session.created") {
+      if (emittedSession) return null;
+      emittedSession = true;
+      const line: Record<string, unknown> = {
+        type: "session",
+        version: PI_SESSION_VERSION,
+        id: sessionId,
+        timestamp: ts,
+      };
+      line[FOREIGN_FIELD] = native;
+      if (cwd !== undefined) line.cwd = cwd;
+      return attachTargetIds(line, claudeIds);
+    }
+
+    if (first.kind === "model.selected") {
+      return attachTargetIds(
+        emit({
+          type: "model_change",
+          ...makeBase(ts, native),
+          provider: first.payload.provider,
+          modelId: first.payload.model,
+        }),
+        claudeIds,
+      );
+    }
+
+    if (first.kind === "tool.result") {
+      const output = first.payload.output;
+      const text = stringifyToolOutput(output);
+      const toolName = first.actor?.toolName ?? toolNameByCallId.get(first.payload.toolCallId);
+      const message: Record<string, unknown> = {
+        role: "toolResult",
+        toolCallId: first.payload.toolCallId,
+        content: [{ type: "text", text }],
+        isError: first.payload.isError,
+        timestamp: ms,
+      };
+      if (toolName !== undefined) message.toolName = toolName;
+      return attachTargetIds(
+        emit({
+          type: "message",
+          ...makeBase(ts, native),
+          message,
+        }),
+        claudeIds,
+      );
+    }
+
+    const assistantBlocks: PiBlock[] = [];
+    const userBlocksRich: PiBlock[] = [];
+    const systemBlocks: PiBlock[] = [];
+    let userText = "";
+    let systemText = "";
+    let userCount = 0;
+    let systemCount = 0;
+
+    for (const event of group) {
+      if (event.kind === "reasoning.created") {
+        assistantBlocks.push({ type: "thinking", thinking: event.payload.text ?? "" });
+        continue;
+      }
+      if (event.kind === "tool.call") {
+        assistantBlocks.push({
+          type: "toolCall",
+          id: event.payload.toolCallId,
+          name: event.payload.name,
+          arguments: event.payload.arguments ?? {},
+        });
+        continue;
+      }
+      if (event.kind === "message.created") {
+        const role = event.payload.role;
+        if (role === "assistant") {
+          for (const part of event.payload.parts) {
+            assistantBlocks.push(partToPiBlock(part));
+          }
+        } else {
+          const messageBlocks = event.payload.parts.map(partToPiBlock);
+          const allText = messageBlocks.every((b) => b.type === "text");
+          if (role === "system") {
+            if (allText) {
+              const text = messageBlocks.map((b) => (typeof b.text === "string" ? b.text : "")).join("");
+              systemText = systemText.length > 0 ? `${systemText}\n${text}` : text;
+            } else {
+              for (const block of messageBlocks) systemBlocks.push(block);
+            }
+            systemCount++;
+          } else {
+            if (allText) {
+              const text = messageBlocks.map((b) => (typeof b.text === "string" ? b.text : "")).join("");
+              userText = userText.length > 0 ? `${userText}\n${text}` : text;
+            } else {
+              for (const block of messageBlocks) userBlocksRich.push(block);
+            }
+            userCount++;
+          }
+        }
+      }
+    }
+
+    if (assistantBlocks.length > 0) {
+      return attachTargetIds(
+        emit({
+          type: "message",
+          ...makeBase(ts, native),
+          message: {
+            role: "assistant",
+            content: assistantBlocks,
+            usage: assistantUsageForGroup(group),
+            timestamp: ms,
+          },
+        }),
+        claudeIds,
+      );
+    }
+
+    if (userCount > 0) {
+      const content: PiBlock[] =
+        userBlocksRich.length > 0
+          ? userText.length > 0
+            ? [{ type: "text", text: userText }, ...userBlocksRich]
+            : userBlocksRich
+          : [{ type: "text", text: userText }];
+      return attachTargetIds(
+        emit({
+          type: "message",
+          ...makeBase(ts, native),
+          message: {
+            role: "user",
+            content,
+            timestamp: ms,
+          },
+        }),
+        claudeIds,
+      );
+    }
+
+    if (systemCount > 0) {
+      const content: PiBlock[] =
+        systemBlocks.length > 0
+          ? systemText.length > 0
+            ? [{ type: "text", text: systemText }, ...systemBlocks]
+            : systemBlocks
+          : [{ type: "text", text: systemText }];
+      return attachTargetIds(
+        emit({
+          type: "message",
+          ...makeBase(ts, native),
+          message: {
+            role: "system",
+            content,
+            timestamp: ms,
+          },
+        }),
+        claudeIds,
+      );
+    }
+
+    const canonicalLines = group.map((event) =>
+      attachTargetIds(
+        emit({
+          ...makeBase(event.timestamp, native),
+          ...renderCanonicalEventLine(event, native),
+        }),
+        readStoredClaudeCodeIds(event),
+      ),
+    );
+    return canonicalLines.length > 0 ? canonicalLines : null;
   });
+
+  if (!hasSessionEvent) {
+    const first = events[0];
+    if (first?.native?.source && first.native.raw !== undefined) {
+      const synthetic: Record<string, unknown> = {
+        type: "session",
+        version: PI_SESSION_VERSION,
+        id: sessionId,
+        timestamp: first.timestamp,
+      };
+      synthetic[FOREIGN_FIELD] = { source: first.native.source, raw: first.native.raw };
+      if (cwd !== undefined) synthetic.cwd = cwd;
+      attachTargetIds(synthetic, readStoredClaudeCodeIds(first));
+      lines.unshift(JSON.stringify(synthetic));
+    }
+  }
 
   return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
-function newPiId(): string {
-  return randomBytes(4).toString("hex");
-}
-
 function epochMs(iso: string): number {
-  const t = Date.parse(iso);
-  return Number.isFinite(t) ? t : 0;
+  return isoTimestampToEpochMs(iso, "canonical event timestamp");
 }
 
-function buildPiBase(parentId: string | null, isoTimestamp: string, sidecar: ForeignEnvelope): Record<string, unknown> {
-  return {
-    id: newPiId(),
-    parentId,
-    timestamp: isoTimestamp,
-    [FOREIGN_FIELD]: sidecar,
-  };
-}
-
-function renderClaudeGroupAsPiLine(
-  group: CanonicalEvent[],
-  claudeRaw: unknown,
-  sessionId: string,
-  cwd: string | undefined,
-  parentId: string | null,
-  emittedSession: boolean,
-): Record<string, unknown> {
-  const claudeLine = (claudeRaw && typeof claudeRaw === "object" ? claudeRaw : {}) as Record<string, unknown>;
-  const claudeType = claudeLine.type;
-  const sidecar: ForeignEnvelope = { source: "claude-code", raw: claudeRaw };
-  const isoTimestamp = group[0]?.timestamp ?? new Date(0).toISOString();
-
-  if (claudeType === "system" && !emittedSession) {
-    return {
-      type: "session",
-      version: 3,
-      id: sessionId,
-      timestamp: isoTimestamp,
-      ...(cwd !== undefined ? { cwd } : {}),
-      [FOREIGN_FIELD]: sidecar,
-    };
-  }
-
-  const base = buildPiBase(parentId, isoTimestamp, sidecar);
-
-  if (claudeType === "user") {
-    const message = claudeLine.message as Record<string, unknown> | undefined;
-    const content = message?.content;
-    if (
-      Array.isArray(content) &&
-      content.some((c) => c && typeof c === "object" && (c as Record<string, unknown>).type === "tool_result")
-    ) {
-      const toolResult = content.find((c): c is Record<string, unknown> =>
-        Boolean(c && typeof c === "object" && (c as Record<string, unknown>).type === "tool_result"),
-      );
-      const text =
-        toolResult && typeof toolResult.content === "string"
-          ? toolResult.content
-          : JSON.stringify(toolResult?.content ?? "");
+function partToPiBlock(part: ContentPart): PiBlock {
+  switch (part.type) {
+    case "text":
+      return { type: "text", text: part.text };
+    case "image":
       return {
-        type: "message",
-        ...base,
-        message: {
-          role: "toolResult",
-          toolCallId:
-            toolResult && typeof toolResult.tool_use_id === "string" ? toolResult.tool_use_id : "unknown-tool-call",
-          toolName: "unknown-tool",
-          content: [{ type: "text", text }],
-          isError: Boolean(toolResult?.is_error),
-          timestamp: epochMs(isoTimestamp),
-        },
+        type: "image",
+        data: part.imageRef,
+        mimeType: part.mediaType ?? "image/png",
       };
-    }
-    const text = typeof content === "string" ? content : extractTextArray(Array.isArray(content) ? content : []);
-    return {
-      type: "message",
-      ...base,
-      message: {
-        role: "user",
-        content: [{ type: "text", text }],
-        timestamp: epochMs(isoTimestamp),
-      },
-    };
-  }
-
-  if (claudeType === "assistant") {
-    const message = claudeLine.message as Record<string, unknown> | undefined;
-    const content = Array.isArray(message?.content) ? message?.content : [];
-    const piContent = content.map(claudeAssistantBlockToPi);
-    return {
-      type: "message",
-      ...base,
-      message: {
-        role: "assistant",
-        content: piContent,
-        timestamp: epochMs(isoTimestamp),
-      },
-    };
-  }
-
-  return {
-    type: "model_change",
-    ...base,
-    provider: "claude-code",
-    modelId: typeof claudeLine.version === "string" ? claudeLine.version : "unknown",
-  };
-}
-
-function renderCodexGroupAsPiLine(
-  group: CanonicalEvent[],
-  codexRaw: unknown,
-  sessionId: string,
-  cwd: string | undefined,
-  parentId: string | null,
-  emittedSession: boolean,
-): Record<string, unknown> {
-  const codexLine = (codexRaw && typeof codexRaw === "object" ? codexRaw : {}) as Record<string, unknown>;
-  const sidecar: ForeignEnvelope = { source: "codex", raw: codexRaw };
-  const isoTimestamp = group[0]?.timestamp ?? new Date(0).toISOString();
-
-  if (codexLine.type === "session_meta" && !emittedSession) {
-    return {
-      type: "session",
-      version: 3,
-      id: sessionId,
-      timestamp: isoTimestamp,
-      ...(cwd !== undefined ? { cwd } : {}),
-      [FOREIGN_FIELD]: sidecar,
-    };
-  }
-
-  const base = buildPiBase(parentId, isoTimestamp, sidecar);
-
-  if (codexLine.type === "response_item") {
-    const item = codexLine.payload as Record<string, unknown> | undefined;
-    if (item) {
-      if (item.type === "message") {
-        const role = item.role;
-        const content = Array.isArray(item.content) ? item.content : [];
-        const text = content
-          .map((c) => {
-            if (!c || typeof c !== "object") return "";
-            const record = c as Record<string, unknown>;
-            if ((record.type === "input_text" || record.type === "output_text") && typeof record.text === "string")
-              return record.text;
-            return "";
-          })
-          .join("");
-        return {
-          type: "message",
-          ...base,
-          message: {
-            role: role === "assistant" ? "assistant" : "user",
-            content: [{ type: "text", text }],
-            timestamp: epochMs(isoTimestamp),
-          },
-        };
-      }
-
-      if (item.type === "reasoning") {
-        const summary = Array.isArray(item.summary) ? item.summary : [];
-        const text = summary
-          .map((part) => {
-            if (!part || typeof part !== "object") return "";
-            const record = part as Record<string, unknown>;
-            return record.type === "summary_text" && typeof record.text === "string" ? record.text : "";
-          })
-          .filter(Boolean)
-          .join("\n\n");
-        return {
-          type: "message",
-          ...base,
-          message: {
-            role: "assistant",
-            content: [{ type: "thinking", thinking: text }],
-            timestamp: epochMs(isoTimestamp),
-          },
-        };
-      }
-
-      if (item.type === "function_call") {
-        return {
-          type: "message",
-          ...base,
-          message: {
-            role: "assistant",
-            content: [
-              {
-                type: "toolCall",
-                id: typeof item.call_id === "string" ? item.call_id : "unknown-tool-call",
-                name: typeof item.name === "string" ? item.name : "unknown-tool",
-                arguments: typeof item.arguments === "string" ? safeJson(item.arguments) : (item.arguments ?? {}),
-              },
-            ],
-            timestamp: epochMs(isoTimestamp),
-          },
-        };
-      }
-
-      if (item.type === "function_call_output") {
-        const output = item.output;
-        const text = typeof output === "string" ? output : JSON.stringify(output ?? "");
-        return {
-          type: "message",
-          ...base,
-          message: {
-            role: "toolResult",
-            toolCallId: typeof item.call_id === "string" ? item.call_id : "unknown-tool-call",
-            toolName: "unknown-tool",
-            content: [{ type: "text", text }],
-            isError: false,
-            timestamp: epochMs(isoTimestamp),
-          },
-        };
-      }
-    }
-  }
-
-  if (codexLine.type === "event_msg") {
-    const item = codexLine.payload as Record<string, unknown> | undefined;
-    if (item?.type === "agent_message" && typeof item.message === "string") {
+    case "file":
       return {
-        type: "message",
-        ...base,
-        message: {
-          role: "assistant",
-          content: [{ type: "text", text: item.message }],
-          timestamp: epochMs(isoTimestamp),
-        },
+        type: "file",
+        fileId: part.fileId,
+        filename: part.filename ?? null,
+        mediaType: part.mediaType ?? null,
       };
-    }
-    if (item?.type === "agent_reasoning" && typeof item.text === "string") {
-      return {
-        type: "message",
-        ...base,
-        message: {
-          role: "assistant",
-          content: [{ type: "thinking", thinking: item.text }],
-          timestamp: epochMs(isoTimestamp),
-        },
-      };
-    }
-  }
-
-  return {
-    type: "model_change",
-    ...base,
-    provider: "codex",
-    modelId: "unknown",
-  };
-}
-
-function renderUnknownAsPiLine(
-  source: string,
-  rawRef: unknown,
-  parentId: string | null,
-  isoTimestamp: string | undefined,
-): Record<string, unknown> {
-  const sidecar: ForeignEnvelope = { source, raw: rawRef };
-  return {
-    type: "model_change",
-    ...buildPiBase(parentId, isoTimestamp ?? new Date(0).toISOString(), sidecar),
-    provider: source,
-    modelId: "unknown",
-  };
-}
-
-function claudeAssistantBlockToPi(block: unknown): Record<string, unknown> {
-  if (!block || typeof block !== "object") return { type: "text", text: "" };
-  const record = block as Record<string, unknown>;
-  if (record.type === "thinking") {
-    return { type: "thinking", thinking: typeof record.thinking === "string" ? record.thinking : "" };
-  }
-  if (record.type === "text") {
-    return { type: "text", text: typeof record.text === "string" ? record.text : "" };
-  }
-  if (record.type === "tool_use") {
-    return {
-      type: "toolCall",
-      id: typeof record.id === "string" ? record.id : "unknown-tool-call",
-      name: typeof record.name === "string" ? record.name : "unknown-tool",
-      arguments: record.input ?? {},
-    };
-  }
-  return { type: "text", text: JSON.stringify(record) };
-}
-
-function extractTextArray(items: unknown[]): string {
-  return items
-    .map((item) => {
-      if (!item || typeof item !== "object") return "";
-      const record = item as Record<string, unknown>;
-      if (record.type === "text" && typeof record.text === "string") return record.text;
-      return "";
-    })
-    .join("");
-}
-
-function safeJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
+    case "json":
+      return { type: "text", text: JSON.stringify(part.value) };
   }
 }

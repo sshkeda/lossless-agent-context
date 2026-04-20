@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import {
   exportClaudeCodeJsonl,
   exportCodexJsonl,
@@ -10,6 +8,8 @@ import {
 } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
+import { readFixture } from "./fixtures";
+import { parseJsonlLines } from "./jsonl";
 
 type RoundtripCase = {
   name: string;
@@ -39,22 +39,10 @@ const roundtripCases: RoundtripCase[] = [
   },
 ];
 
-function fixture(name: string): string {
-  return readFileSync(join(process.cwd(), "fixtures", name), "utf8");
-}
-
-function parseJsonlLines(text: string): unknown[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => JSON.parse(line));
-}
-
 describe("provider-roundtrip e2e (native -> canonical -> native)", () => {
   for (const testCase of roundtripCases) {
     it(`${testCase.name} JSONL roundtrips losslessly`, () => {
-      const sourceText = fixture(testCase.fixtureFile);
+      const sourceText = readFixture(testCase.fixtureFile);
       const events = testCase.importToCanonical(sourceText);
       const exported = testCase.exportFromCanonical(events);
 
@@ -65,7 +53,7 @@ describe("provider-roundtrip e2e (native -> canonical -> native)", () => {
     });
 
     it(`${testCase.name} double roundtrip is stable`, () => {
-      const sourceText = fixture(testCase.fixtureFile);
+      const sourceText = readFixture(testCase.fixtureFile);
       const firstEvents = testCase.importToCanonical(sourceText);
       const firstExport = testCase.exportFromCanonical(firstEvents);
       const secondEvents = testCase.importToCanonical(firstExport);

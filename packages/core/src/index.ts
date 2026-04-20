@@ -1,10 +1,14 @@
-export type { CanonicalEvent, ContentPart } from "./schema";
+export type { CanonicalEvent, Citation, ContentPart } from "./schema";
 export {
   actorSchema,
   baseEnvelopeSchema,
   branchCreatedEventSchema,
+  CANONICAL_SCHEMA_VERSION,
+  cacheInfoSchema,
   canonicalEventSchema,
+  canonicalSchemaVersionSchema,
   causalitySchema,
+  citationSchema,
   contentPartSchema,
   messageEventSchema,
   modelCompletedEventSchema,
@@ -13,7 +17,9 @@ export {
   nativeRefSchema,
   providerEventSchema,
   reasoningEventSchema,
+  resolveCanonicalSchemaVersion,
   runtimeErrorEventSchema,
+  SUPPORTED_CANONICAL_SCHEMA_VERSIONS,
   sessionCreatedEventSchema,
   toolCallEventSchema,
   toolResultEventSchema,

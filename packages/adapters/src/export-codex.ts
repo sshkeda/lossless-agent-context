@@ -1,290 +1,324 @@
-import type { CanonicalEvent } from "@lossless-agent-context/core";
+import type { CanonicalEvent, Citation, ContentPart } from "@lossless-agent-context/core";
+import { attachClaudeCodeTargetIds, readStoredClaudeCodeIds } from "./claude-code-ids";
 import {
-  emitSemanticGroupedLines,
+  emitTargetGroupedLines,
   FOREIGN_FIELD,
   type ForeignEnvelope,
   inferSessionIdForTarget,
   inferWorkingDirectory,
+  renderCanonicalEventLine,
 } from "./cross-provider";
+import { CODEX_ASSISTANT_PARTS_FIELD, TARGET_IDS_FIELD } from "./defaults";
+import { stringifyToolOutput } from "./utils";
 
 export function exportCodexJsonl(events: CanonicalEvent[]): string {
   const sessionId = inferSessionIdForTarget(events, "codex");
   const cwd = inferWorkingDirectory(events);
+  const modelProvider = inferCodexModelProvider(events);
+  const hasSessionEvent = events.some((event) => event.kind === "session.created");
   let emittedSession = false;
+  let emittedThreadRegistration = false;
 
-  const { lines } = emitSemanticGroupedLines(events, "codex", (source, group, native) => {
-    let line: Record<string, unknown>;
-    if (source === "claude-code") {
-      line = renderClaudeGroupAsCodexLine(group, native.raw, sessionId, cwd, emittedSession);
-    } else if (source === "pi") {
-      line = renderPiGroupAsCodexLine(group, native.raw, sessionId, cwd, emittedSession);
-    } else {
-      line = renderUnknownAsCodexLine(source, native.raw, group[0]?.timestamp);
-    }
-    if (line.type === "session_meta") emittedSession = true;
-    return line;
-  });
+  function attachTargetMetadata(
+    line: Record<string, unknown>,
+    event: CanonicalEvent,
+    codexMetadata?: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const ids = readStoredClaudeCodeIds(event);
+    const withClaudeIds = attachClaudeCodeTargetIds(line, ids);
+    if (!codexMetadata) return withClaudeIds;
+    const targets =
+      withClaudeIds[TARGET_IDS_FIELD] &&
+      typeof withClaudeIds[TARGET_IDS_FIELD] === "object" &&
+      !Array.isArray(withClaudeIds[TARGET_IDS_FIELD])
+        ? ({ ...(withClaudeIds[TARGET_IDS_FIELD] as Record<string, unknown>) } as Record<string, unknown>)
+        : {};
+    targets.codex = codexMetadata;
+    withClaudeIds[TARGET_IDS_FIELD] = targets;
+    return withClaudeIds;
+  }
 
-  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
-}
+  function makeBase(timestamp: string, sidecar: ForeignEnvelope): Record<string, unknown> {
+    const base: Record<string, unknown> = { timestamp };
+    base[FOREIGN_FIELD] = sidecar;
+    return base;
+  }
 
-function buildCodexBase(isoTimestamp: string, sidecar: ForeignEnvelope): Record<string, unknown> {
-  return {
-    timestamp: isoTimestamp,
-    [FOREIGN_FIELD]: sidecar,
-  };
-}
-
-function renderClaudeGroupAsCodexLine(
-  group: CanonicalEvent[],
-  claudeRaw: unknown,
-  sessionId: string,
-  cwd: string | undefined,
-  emittedSession: boolean,
-): Record<string, unknown> {
-  const claudeLine = (claudeRaw && typeof claudeRaw === "object" ? claudeRaw : {}) as Record<string, unknown>;
-  const claudeType = claudeLine.type;
-  const sidecar: ForeignEnvelope = { source: "claude-code", raw: claudeRaw };
-  const isoTimestamp = group[0]?.timestamp ?? new Date(0).toISOString();
-
-  if (claudeType === "system" && !emittedSession) {
+  function makeSessionMetaPayload(timestamp: string, provider: string | undefined): Record<string, unknown> {
     return {
-      ...buildCodexBase(isoTimestamp, sidecar),
-      type: "session_meta",
-      payload: {
-        id: sessionId,
-        timestamp: isoTimestamp,
-        ...(cwd !== undefined ? { cwd } : {}),
-        model_provider: "claude-code",
-      },
+      id: sessionId,
+      timestamp,
+      ...(provider !== undefined ? { model_provider: provider } : {}),
+      ...(cwd !== undefined ? { cwd } : {}),
     };
   }
 
-  const message = claudeLine.message as Record<string, unknown> | undefined;
-
-  if (claudeType === "user") {
-    const content = message?.content;
-    if (
-      Array.isArray(content) &&
-      content.some((c) => c && typeof c === "object" && (c as Record<string, unknown>).type === "tool_result")
-    ) {
-      const toolResult = content.find((c): c is Record<string, unknown> =>
-        Boolean(c && typeof c === "object" && (c as Record<string, unknown>).type === "tool_result"),
-      );
-      const text =
-        toolResult && typeof toolResult.content === "string"
-          ? toolResult.content
-          : JSON.stringify(toolResult?.content ?? "");
-      return {
-        ...buildCodexBase(isoTimestamp, sidecar),
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id:
-            toolResult && typeof toolResult.tool_use_id === "string" ? toolResult.tool_use_id : "unknown-tool-call",
-          output: text,
-        },
-      };
-    }
-    const text = typeof content === "string" ? content : extractTextArray(Array.isArray(content) ? content : []);
+  function makeThreadRegistrationLine(timestamp: string, sidecar: ForeignEnvelope): Record<string, unknown> | null {
+    if (emittedThreadRegistration) return null;
+    emittedThreadRegistration = true;
     return {
-      ...buildCodexBase(isoTimestamp, sidecar),
-      type: "response_item",
-      payload: {
-        type: "message",
-        role: "user",
-        content: [{ type: "input_text", text }],
-      },
-    };
-  }
-
-  if (claudeType === "assistant") {
-    const content = Array.isArray(message?.content) ? message?.content : [];
-    const blocks = content.filter((c): c is Record<string, unknown> => Boolean(c && typeof c === "object"));
-    const toolUse = blocks.find((b) => b.type === "tool_use");
-    if (toolUse) {
-      return {
-        ...buildCodexBase(isoTimestamp, sidecar),
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          name: typeof toolUse.name === "string" ? toolUse.name : "unknown-tool",
-          arguments: typeof toolUse.input === "string" ? toolUse.input : JSON.stringify(toolUse.input ?? {}),
-          call_id: typeof toolUse.id === "string" ? toolUse.id : "unknown-tool-call",
-        },
-      };
-    }
-    const thinking = blocks.find((b) => b.type === "thinking");
-    if (thinking) {
-      const text = typeof thinking.thinking === "string" ? thinking.thinking : "";
-      return {
-        ...buildCodexBase(isoTimestamp, sidecar),
-        type: "response_item",
-        payload: {
-          type: "reasoning",
-          summary: [{ type: "summary_text", text }],
-        },
-      };
-    }
-    const textBlock = blocks.find((b) => b.type === "text");
-    const text = textBlock && typeof textBlock.text === "string" ? textBlock.text : "";
-    return {
-      ...buildCodexBase(isoTimestamp, sidecar),
-      type: "response_item",
-      payload: {
-        type: "message",
-        role: "assistant",
-        content: [{ type: "output_text", text }],
-      },
-    };
-  }
-
-  return {
-    ...buildCodexBase(isoTimestamp, sidecar),
-    type: "event_msg",
-    payload: { type: "claude-unknown" },
-  };
-}
-
-function renderPiGroupAsCodexLine(
-  group: CanonicalEvent[],
-  piRaw: unknown,
-  sessionId: string,
-  cwd: string | undefined,
-  emittedSession: boolean,
-): Record<string, unknown> {
-  const piLine = (piRaw && typeof piRaw === "object" ? piRaw : {}) as Record<string, unknown>;
-  const sidecar: ForeignEnvelope = { source: "pi", raw: piRaw };
-  const isoTimestamp = group[0]?.timestamp ?? new Date(0).toISOString();
-
-  if (piLine.type === "session" && !emittedSession) {
-    return {
-      ...buildCodexBase(isoTimestamp, sidecar),
-      type: "session_meta",
-      payload: {
-        id: sessionId,
-        timestamp: isoTimestamp,
-        ...(cwd !== undefined ? { cwd } : {}),
-        model_provider: "pi",
-      },
-    };
-  }
-
-  if (piLine.type === "model_change") {
-    return {
-      ...buildCodexBase(isoTimestamp, sidecar),
+      ...makeBase(timestamp, sidecar),
       type: "event_msg",
       payload: {
-        type: "model_change",
-        message: typeof piLine.modelId === "string" ? piLine.modelId : "unknown",
+        type: "thread_name_updated",
+        thread_id: sessionId,
+        thread_name: sessionId,
       },
     };
   }
 
-  if (piLine.type === "message") {
-    const piMessage = piLine.message as Record<string, unknown> | undefined;
-    if (piMessage) {
-      const role = piMessage.role;
+  function renderEvent(event: CanonicalEvent, native: ForeignEnvelope): Record<string, unknown> | null {
+    const ts = event.timestamp;
 
-      if (role === "user" || role === "system") {
-        const content = piMessage.content;
-        const text = typeof content === "string" ? content : extractTextArray(Array.isArray(content) ? content : []);
-        return {
-          ...buildCodexBase(isoTimestamp, sidecar),
-          type: "response_item",
-          payload: {
-            type: "message",
-            role: "user",
-            content: [{ type: "input_text", text }],
-          },
-        };
-      }
+    if (event.kind === "session.created") {
+      if (emittedSession) return null;
+      emittedSession = true;
+      return {
+        ...makeBase(ts, native),
+        type: "session_meta",
+        payload: makeSessionMetaPayload(ts, event.payload.provider ?? modelProvider),
+      };
+    }
 
+    if (event.kind === "model.selected") {
+      return {
+        ...makeBase(ts, native),
+        type: "event_msg",
+        payload: {
+          type: "model_change",
+          message: event.payload.model,
+          provider: event.payload.provider,
+        },
+      };
+    }
+
+    if (event.kind === "message.created") {
+      const role = event.payload.role;
       if (role === "assistant") {
-        const content = Array.isArray(piMessage.content) ? piMessage.content : [];
-        const blocks = content.filter((c): c is Record<string, unknown> => Boolean(c && typeof c === "object"));
-        const toolCall = blocks.find((b) => b.type === "toolCall");
-        if (toolCall) {
-          return {
-            ...buildCodexBase(isoTimestamp, sidecar),
-            type: "response_item",
-            payload: {
-              type: "function_call",
-              name: typeof toolCall.name === "string" ? toolCall.name : "unknown-tool",
-              arguments:
-                typeof toolCall.arguments === "string" ? toolCall.arguments : JSON.stringify(toolCall.arguments ?? {}),
-              call_id: typeof toolCall.id === "string" ? toolCall.id : "unknown-tool-call",
-            },
-          };
-        }
-        const thinking = blocks.find((b) => b.type === "thinking");
-        if (thinking) {
-          const text = typeof thinking.thinking === "string" ? thinking.thinking : "";
-          return {
-            ...buildCodexBase(isoTimestamp, sidecar),
-            type: "response_item",
-            payload: {
-              type: "reasoning",
-              summary: [{ type: "summary_text", text }],
-            },
-          };
-        }
-        const textBlock = blocks.find((b) => b.type === "text");
-        const text = textBlock && typeof textBlock.text === "string" ? textBlock.text : "";
+        const content = event.payload.parts.flatMap((part) => partToCodexAssistantContent(part));
         return {
-          ...buildCodexBase(isoTimestamp, sidecar),
+          ...makeBase(ts, native),
           type: "response_item",
           payload: {
             type: "message",
             role: "assistant",
-            content: [{ type: "output_text", text }],
+            content,
           },
         };
+      }
+      const codexRole = role === "system" ? "system" : "user";
+      const content = event.payload.parts.map((part) => partToCodexUserContent(part));
+      return {
+        ...makeBase(ts, native),
+        type: "response_item",
+        payload: {
+          type: "message",
+          role: codexRole,
+          content,
+        },
+      };
+    }
+
+    if (event.kind === "reasoning.created") {
+      return {
+        ...makeBase(ts, native),
+        type: "response_item",
+        payload: {
+          type: "reasoning",
+          summary: [{ type: "summary_text", text: event.payload.text ?? "" }],
+        },
+      };
+    }
+
+    if (event.kind === "tool.call") {
+      const args = event.payload.arguments;
+      return {
+        ...makeBase(ts, native),
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: event.payload.name,
+          arguments: typeof args === "string" ? args : JSON.stringify(args ?? {}),
+          call_id: event.payload.toolCallId,
+        },
+      };
+    }
+
+    if (event.kind === "tool.result") {
+      return {
+        ...makeBase(ts, native),
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: event.payload.toolCallId,
+          output: stringifyToolOutput(event.payload.output),
+        },
+      };
+    }
+
+    return null;
+  }
+
+  const { lines } = emitTargetGroupedLines(events, "codex", (group, native) => {
+    const out: Record<string, unknown>[] = [];
+    for (let index = 0; index < group.length; index++) {
+      const event = group[index];
+      if (!event) continue;
+      if (event.kind === "message.created") {
+        const mergedEvents = [event];
+        let nextIndex = index + 1;
+        while (nextIndex < group.length) {
+          const next = group[nextIndex];
+          if (!next || next.kind !== "message.created" || next.payload.role !== event.payload.role) break;
+          mergedEvents.push(next);
+          nextIndex++;
+        }
+        index = nextIndex - 1;
+
+        const parts = mergedEvents.flatMap((item) => item.payload.parts);
+        const role = event.payload.role;
+        if (role === "assistant") {
+          const line: Record<string, unknown> = {
+            ...makeBase(event.timestamp, native),
+            type: "response_item",
+            payload: {
+              type: "message",
+              role: "assistant",
+              content: parts.flatMap((part) => partToCodexAssistantContent(part)),
+            },
+          };
+          out.push(attachTargetMetadata(line, event, buildCodexAssistantMetadata(parts)));
+        } else {
+          const codexRole = role === "system" ? "system" : "user";
+          const line: Record<string, unknown> = {
+            ...makeBase(event.timestamp, native),
+            type: "response_item",
+            payload: {
+              type: "message",
+              role: codexRole,
+              content: parts.map((part) => partToCodexUserContent(part)),
+            },
+          };
+          out.push(attachTargetMetadata(line, event));
+        }
+        continue;
       }
 
-      if (role === "toolResult") {
-        const content = Array.isArray(piMessage.content) ? piMessage.content : [];
-        const text = extractTextArray(content);
-        return {
-          ...buildCodexBase(isoTimestamp, sidecar),
-          type: "response_item",
-          payload: {
-            type: "function_call_output",
-            call_id: typeof piMessage.toolCallId === "string" ? piMessage.toolCallId : "unknown-tool-call",
-            output: text,
-          },
-        };
+      const line = renderEvent(event, native);
+      if (line !== null) {
+        out.push(attachTargetMetadata(line, event));
+        if (event.kind === "session.created") {
+          const registration = makeThreadRegistrationLine(event.timestamp, native);
+          if (registration) out.push(registration);
+        }
+      } else {
+        out.push(attachTargetMetadata(renderCanonicalEventLine(event, native), event));
       }
+    }
+    return out.length > 0 ? out : null;
+  });
+
+  if (!hasSessionEvent) {
+    const first = events[0];
+    if (first?.native?.source && first.native.raw !== undefined) {
+      const synthetic: Record<string, unknown> = {
+        timestamp: first.timestamp,
+        type: "session_meta",
+        payload: makeSessionMetaPayload(first.timestamp, modelProvider),
+      };
+      synthetic[FOREIGN_FIELD] = { source: first.native.source, raw: first.native.raw };
+      attachTargetMetadata(synthetic, first);
+      lines.unshift(JSON.stringify(synthetic));
+      const registration = makeThreadRegistrationLine(first.timestamp, {
+        source: first.native.source,
+        raw: first.native.raw,
+      });
+      if (registration) lines.splice(1, 0, JSON.stringify(registration));
     }
   }
 
-  return {
-    ...buildCodexBase(isoTimestamp, sidecar),
-    type: "event_msg",
-    payload: { type: "pi-unknown" },
-  };
+  return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
-function renderUnknownAsCodexLine(
-  source: string,
-  rawRef: unknown,
-  isoTimestamp: string | undefined,
-): Record<string, unknown> {
-  const sidecar: ForeignEnvelope = { source, raw: rawRef };
-  return {
-    ...buildCodexBase(isoTimestamp ?? new Date(0).toISOString(), sidecar),
-    type: "event_msg",
-    payload: { type: `${source}-unknown` },
-  };
+function inferCodexModelProvider(events: CanonicalEvent[]): string | undefined {
+  for (const event of events) {
+    if (event.kind === "session.created" && event.payload.provider !== undefined) return event.payload.provider;
+  }
+  for (const event of events) {
+    if (event.kind === "model.selected") return event.payload.provider;
+  }
+  for (const event of events) {
+    if (event.actor?.provider !== undefined) return event.actor.provider;
+  }
+  return undefined;
 }
 
-function extractTextArray(items: unknown[]): string {
-  return items
-    .map((item) => {
-      if (!item || typeof item !== "object") return "";
-      const record = item as Record<string, unknown>;
-      if (record.type === "text" && typeof record.text === "string") return record.text;
-      return "";
-    })
-    .join("");
+function partToCodexUserContent(part: ContentPart): Record<string, unknown> {
+  switch (part.type) {
+    case "text":
+      return { type: "input_text", text: part.text };
+    case "image": {
+      const url = part.imageRef.startsWith("data:")
+        ? part.imageRef
+        : `data:${part.mediaType ?? "image/png"};base64,${part.imageRef}`;
+      return { type: "input_image", image_url: url };
+    }
+    case "file":
+      return {
+        type: "input_text",
+        text: JSON.stringify({
+          fileId: part.fileId,
+          filename: part.filename ?? null,
+          mediaType: part.mediaType ?? null,
+        }),
+      };
+    case "json":
+      return { type: "input_text", text: JSON.stringify(part.value) };
+  }
+}
+
+function partToCodexAssistantContent(part: ContentPart): Record<string, unknown>[] {
+  if (part.type === "text") {
+    return [
+      {
+        type: "output_text",
+        text: part.text,
+        ...(part.citations ? { annotations: part.citations.map(citationToCodexAnnotation) } : {}),
+      },
+    ];
+  }
+  return [];
+}
+
+function buildCodexAssistantMetadata(parts: ContentPart[]): Record<string, unknown> | undefined {
+  if (parts.every((part) => part.type === "text")) return undefined;
+  return { [CODEX_ASSISTANT_PARTS_FIELD]: parts };
+}
+
+function citationToCodexAnnotation(citation: Citation): Record<string, unknown> {
+  switch (citation.type) {
+    case "url_citation":
+      return {
+        type: "url_citation",
+        ...(citation.url ? { url: citation.url } : {}),
+        ...(citation.title ? { title: citation.title } : {}),
+        ...(citation.startIndex !== undefined ? { start_index: citation.startIndex } : {}),
+        ...(citation.endIndex !== undefined ? { end_index: citation.endIndex } : {}),
+      };
+    case "file_citation":
+      return {
+        type: "file_citation",
+        ...(citation.fileId ? { file_id: citation.fileId } : {}),
+        ...(citation.filename ? { filename: citation.filename } : {}),
+        ...(citation.startIndex !== undefined ? { start_index: citation.startIndex } : {}),
+        ...(citation.endIndex !== undefined ? { end_index: citation.endIndex } : {}),
+      };
+    case "provider_citation":
+      return {
+        ...((citation.raw && typeof citation.raw === "object" && !Array.isArray(citation.raw)
+          ? citation.raw
+          : { raw: citation.raw }) as Record<string, unknown>),
+        type: citation.citationType,
+      };
+  }
 }

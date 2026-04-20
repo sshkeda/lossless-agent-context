@@ -1,3 +1,6 @@
+// Patches missing types for `InMemorySessionStore` / `getSessionMessages` / `sessionStore`
+// option, which exist at runtime in @anthropic-ai/claude-agent-sdk but are not in the
+// shipped .d.ts. Remove this file once upstream declares them.
 import "@anthropic-ai/claude-agent-sdk";
 import type { SessionMessage } from "@anthropic-ai/claude-agent-sdk";
 

@@ -1,6 +1,6 @@
 [
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "pi-session-1:000000",
     "sessionId": "pi-session-1",
     "branchId": "main",
@@ -8,6 +8,7 @@
     "timestamp": "2026-04-15T23:29:28.744Z",
     "native": {
       "source": "pi",
+      "rawRef": "session",
       "raw": {
         "type": "session",
         "version": 3,
@@ -16,6 +17,9 @@
         "cwd": "/tmp/lossless-agent-context"
       }
     },
+    "extensions": {
+      "version": "3"
+    },
     "kind": "session.created",
     "payload": {
       "startedAt": "2026-04-15T23:29:28.744Z",
@@ -23,7 +27,7 @@
     }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "pi-session-1:000001",
     "sessionId": "pi-session-1",
     "branchId": "main",
@@ -31,6 +35,7 @@
     "timestamp": "2026-04-15T23:29:29.133Z",
     "native": {
       "source": "pi",
+      "rawRef": "model_change",
       "raw": {
         "type": "model_change",
         "id": "a3fbf1b9",
@@ -47,15 +52,18 @@
     }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "pi-session-1:000002",
     "sessionId": "pi-session-1",
     "branchId": "main",
     "seq": 2,
     "timestamp": "2026-04-15T23:29:35.645Z",
-    "actor": { "type": "user" },
+    "actor": {
+      "type": "user"
+    },
     "native": {
       "source": "pi",
+      "rawRef": "message.user",
       "raw": {
         "type": "message",
         "id": "e516b1fd",
@@ -63,7 +71,12 @@
         "timestamp": "2026-04-15T23:29:35.652Z",
         "message": {
           "role": "user",
-          "content": [{ "type": "text", "text": "spin up the dev server pls" }],
+          "content": [
+            {
+              "type": "text",
+              "text": "spin up the dev server pls"
+            }
+          ],
           "timestamp": 1776295775645
         }
       }
@@ -71,19 +84,27 @@
     "kind": "message.created",
     "payload": {
       "role": "user",
-      "parts": [{ "type": "text", "text": "spin up the dev server pls" }]
+      "parts": [
+        {
+          "type": "text",
+          "text": "spin up the dev server pls"
+        }
+      ]
     }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "pi-session-1:000003",
     "sessionId": "pi-session-1",
     "branchId": "main",
     "seq": 3,
     "timestamp": "2026-04-15T23:29:35.652Z",
-    "actor": { "type": "assistant" },
+    "actor": {
+      "type": "assistant"
+    },
     "native": {
       "source": "pi",
+      "rawRef": "message.assistant.content[0].thinking",
       "raw": {
         "type": "message",
         "id": "e8902860",
@@ -92,8 +113,18 @@
         "message": {
           "role": "assistant",
           "content": [
-            { "type": "thinking", "thinking": "Need to start the dev server." },
-            { "type": "toolCall", "id": "call_1", "name": "ask_claude_code", "arguments": { "input": "spin up the dev server pls" } }
+            {
+              "type": "thinking",
+              "thinking": "Need to start the dev server."
+            },
+            {
+              "type": "toolCall",
+              "id": "call_1",
+              "name": "ask_claude_code",
+              "arguments": {
+                "input": "spin up the dev server pls"
+              }
+            }
           ],
           "api": "claude-code-mock-api",
           "provider": "claude-code",
@@ -111,15 +142,19 @@
     }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "pi-session-1:000004",
     "sessionId": "pi-session-1",
     "branchId": "main",
     "seq": 4,
     "timestamp": "2026-04-15T23:29:35.652Z",
-    "actor": { "type": "assistant", "toolName": "ask_claude_code" },
+    "actor": {
+      "type": "assistant",
+      "toolName": "ask_claude_code"
+    },
     "native": {
       "source": "pi",
+      "rawRef": "message.assistant.content[1].toolCall",
       "raw": {
         "type": "message",
         "id": "e8902860",
@@ -128,8 +163,18 @@
         "message": {
           "role": "assistant",
           "content": [
-            { "type": "thinking", "thinking": "Need to start the dev server." },
-            { "type": "toolCall", "id": "call_1", "name": "ask_claude_code", "arguments": { "input": "spin up the dev server pls" } }
+            {
+              "type": "thinking",
+              "thinking": "Need to start the dev server."
+            },
+            {
+              "type": "toolCall",
+              "id": "call_1",
+              "name": "ask_claude_code",
+              "arguments": {
+                "input": "spin up the dev server pls"
+              }
+            }
           ],
           "api": "claude-code-mock-api",
           "provider": "claude-code",
@@ -143,19 +188,25 @@
     "payload": {
       "toolCallId": "call_1",
       "name": "ask_claude_code",
-      "arguments": { "input": "spin up the dev server pls" }
+      "arguments": {
+        "input": "spin up the dev server pls"
+      }
     }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "pi-session-1:000005",
     "sessionId": "pi-session-1",
     "branchId": "main",
     "seq": 5,
     "timestamp": "2026-04-15T23:29:46.900Z",
-    "actor": { "type": "tool" },
+    "actor": {
+      "type": "tool",
+      "toolName": "ask_claude_code"
+    },
     "native": {
       "source": "pi",
+      "rawRef": "message.toolResult",
       "raw": {
         "type": "message",
         "id": "936682b7",
@@ -165,7 +216,12 @@
           "role": "toolResult",
           "toolCallId": "call_1",
           "toolName": "ask_claude_code",
-          "content": [{ "type": "text", "text": "{\"output\":\"Dev server is starting\"}" }],
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"output\":\"Dev server is starting\"}"
+            }
+          ],
           "isError": false,
           "timestamp": 1776295786900
         }
@@ -174,7 +230,12 @@
     "kind": "tool.result",
     "payload": {
       "toolCallId": "call_1",
-      "output": [{ "type": "text", "text": "{\"output\":\"Dev server is starting\"}" }],
+      "output": [
+        {
+          "type": "text",
+          "text": "{\"output\":\"Dev server is starting\"}"
+        }
+      ],
       "isError": false
     }
   }

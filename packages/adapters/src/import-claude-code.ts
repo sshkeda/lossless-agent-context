@@ -1,95 +1,269 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { FOREIGN_FIELD, isForeignLine, readForeignEnvelope, reimportForeignRaw, rewriteIds } from "./cross-provider";
-import { createEvent, DEFAULT_BRANCH_ID, parseJsonl, toIsoTimestamp } from "./utils";
+import {
+  applyCanonicalOverridesToRange,
+  importEmbeddedCrossProviderLine,
+  isForeignLine,
+  readCanonicalOverrides,
+} from "./cross-provider";
+import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
+import {
+  createEvent,
+  DEFAULT_BRANCH_ID,
+  nativeForLine,
+  parseJsonl,
+  syntheticSessionId,
+  toIsoTimestamp,
+  toolActor,
+  withNativeRawRef,
+  withSyntheticTimestampExtension,
+} from "./utils";
 
-type NativeRef = { source: string; raw: unknown };
+type Extensions = Record<string, unknown> | undefined;
 
-function nativeForLine(line: Record<string, unknown>): NativeRef {
-  const sidecar = line[FOREIGN_FIELD];
-  if (sidecar && typeof sidecar === "object" && !Array.isArray(sidecar)) {
-    const record = sidecar as Record<string, unknown>;
-    if (typeof record.source === "string") {
-      return { source: record.source, raw: record.raw };
-    }
+function lineExtensions(line: Record<string, unknown>, extra?: Record<string, unknown>): Extensions {
+  const merged: Record<string, unknown> = {};
+  const claudeIds: Record<string, unknown> = {};
+
+  if (typeof line.uuid === "string") claudeIds.uuid = line.uuid;
+  if (typeof line.parentUuid === "string" || line.parentUuid === null) claudeIds.parentUuid = line.parentUuid;
+  if (Object.keys(claudeIds).length > 0) merged[CLAUDE_CODE_IDS_EXTENSION] = claudeIds;
+  if (extra) Object.assign(merged, extra);
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function cacheFromClaudeMessage(message: Record<string, unknown> | undefined): CanonicalEvent["cache"] | undefined {
+  const usage = message?.usage;
+  if (!usage || typeof usage !== "object" || Array.isArray(usage)) return undefined;
+  const record = usage as Record<string, unknown>;
+  const readTokens = typeof record.cache_read_input_tokens === "number" ? record.cache_read_input_tokens : undefined;
+  const writeTokens =
+    typeof record.cache_creation_input_tokens === "number" ? record.cache_creation_input_tokens : undefined;
+  const inputTokens = typeof record.input_tokens === "number" ? record.input_tokens : undefined;
+  const outputTokens = typeof record.output_tokens === "number" ? record.output_tokens : undefined;
+  const totalTokens =
+    inputTokens !== undefined || outputTokens !== undefined ? (inputTokens ?? 0) + (outputTokens ?? 0) : undefined;
+  if (
+    readTokens === undefined &&
+    writeTokens === undefined &&
+    inputTokens === undefined &&
+    outputTokens === undefined &&
+    record.cache_creation === undefined
+  ) {
+    return undefined;
   }
-  return { source: "claude-code", raw: line };
+  return {
+    provider: "anthropic",
+    readTokens,
+    writeTokens,
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    details:
+      record.cache_creation && typeof record.cache_creation === "object" && !Array.isArray(record.cache_creation)
+        ? { cache_creation: record.cache_creation }
+        : undefined,
+  };
 }
 
 export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
-  const lines = parseJsonl(text) as Array<Record<string, unknown>>;
+  const lines = parseJsonl(text);
   const events: CanonicalEvent[] = [];
 
   const firstNativeLine = lines.find((line) => !isForeignLine(line));
-  const sessionId = typeof firstNativeLine?.sessionId === "string" ? firstNativeLine.sessionId : "claude-session";
-  const branchId = DEFAULT_BRANCH_ID;
-  let createdSession = false;
+  let currentSessionId =
+    typeof firstNativeLine?.sessionId === "string"
+      ? firstNativeLine.sessionId
+      : syntheticSessionId("claude-code", text);
+  const createdSessions = new Set<string>();
+  const toolNameByCallId = new Map<string, string>();
 
-  function ensureSession(line: Record<string, unknown>) {
-    if (createdSession) return;
-    createdSession = true;
+  function ensureSession(line: Record<string, unknown>, sessionId: string) {
+    if (createdSessions.has(sessionId)) return;
+    createdSessions.add(sessionId);
+    const native = withNativeRawRef(nativeForLine(line, "claude-code"), "session");
+    const version = native.source === "claude-code" && typeof line.version === "string" ? line.version : undefined;
     createEvent(events, {
       sessionId,
-      branchId,
-      timestamp: toIsoTimestamp(line.timestamp),
+      branchId: DEFAULT_BRANCH_ID,
+      timestamp: toIsoTimestamp(line.timestamp, "Claude line timestamp"),
       kind: "session.created",
       payload: {
-        startedAt: toIsoTimestamp(line.timestamp),
+        startedAt: toIsoTimestamp(line.timestamp, "Claude line timestamp"),
         workingDirectory: typeof line.cwd === "string" ? line.cwd : undefined,
-        model: typeof line.version === "string" ? line.version : undefined,
       },
-      native: nativeForLine(line),
+      extensions: lineExtensions(line, version !== undefined ? { version } : undefined),
+      native,
     });
   }
 
   for (const line of lines) {
-    if (isForeignLine(line)) {
-      const envelope = readForeignEnvelope(line);
-      if (envelope) {
-        const foreign = reimportForeignRaw(envelope);
-        const rewritten = rewriteIds(foreign, sessionId, branchId, events.length);
-        for (const event of rewritten) events.push(event);
+    if (typeof line.sessionId === "string") currentSessionId = line.sessionId;
+    const sessionId = currentSessionId;
+    const branchId = DEFAULT_BRANCH_ID;
+    const beforeIndex = events.length;
+    const overrides = readCanonicalOverrides(line);
+    const lineTimestamp =
+      line.type === "last-prompt" && typeof line.timestamp !== "string"
+        ? new Date(0).toISOString()
+        : toIsoTimestamp(line.timestamp, "Claude line timestamp");
+    try {
+      const embedded = importEmbeddedCrossProviderLine(
+        line,
+        "claude-code",
+        sessionId,
+        branchId,
+        events.length,
+        lineTimestamp,
+      );
+      if (embedded) {
+        for (const event of embedded) events.push(event);
         continue;
       }
-    }
 
-    ensureSession(line);
-    const native = nativeForLine(line);
+      if (line.type !== "last-prompt") ensureSession(line, sessionId);
+      const baseNative = nativeForLine(line, "claude-code");
+      const native = (rawRef?: string) => withNativeRawRef(baseNative, rawRef);
 
-    switch (line.type) {
-      case "user": {
-        const message = line.message as Record<string, unknown> | undefined;
-        const content = message?.content;
-        if (typeof content === "string") {
+      switch (line.type) {
+        case "last-prompt": {
           createEvent(events, {
             sessionId,
             branchId,
-            timestamp: toIsoTimestamp(line.timestamp),
-            kind: "message.created",
-            actor: { type: "user" },
-            payload: { role: "user", parts: [{ type: "text", text: content }] },
-            native,
+            timestamp: lineTimestamp,
+            kind: "provider.event",
+            payload: {
+              provider: "claude-code",
+              eventType: "last-prompt",
+              raw: line,
+            },
+            extensions: withSyntheticTimestampExtension(lineExtensions(line), typeof line.timestamp !== "string"),
+            native: native("last-prompt"),
           });
           break;
         }
+        case "user": {
+          const message = line.message as Record<string, unknown> | undefined;
+          const content = message?.content;
+          if (typeof content === "string") {
+            createEvent(events, {
+              sessionId,
+              branchId,
+              timestamp: lineTimestamp,
+              kind: "message.created",
+              actor: { type: "user" },
+              payload: { role: "user", parts: [{ type: "text", text: content }] },
+              extensions: lineExtensions(line),
+              native: native("user.message"),
+            });
+            break;
+          }
 
-        if (Array.isArray(content)) {
-          for (const part of content) {
+          if (Array.isArray(content)) {
+            for (const [partIndex, part] of content.entries()) {
+              if (!part || typeof part !== "object") continue;
+              const record = part as Record<string, unknown>;
+
+              if (record.type === "tool_result") {
+                if (typeof record.tool_use_id !== "string") {
+                  createEvent(events, {
+                    sessionId,
+                    branchId,
+                    timestamp: lineTimestamp,
+                    kind: "provider.event",
+                    payload: {
+                      provider: "claude-code",
+                      eventType: "tool_result.invalid",
+                      raw: line,
+                    },
+                    extensions: lineExtensions(line),
+                    native: native(`user.content[${partIndex}].tool_result.invalid`),
+                  });
+                  continue;
+                }
+                const toolCallId = record.tool_use_id;
+                createEvent(events, {
+                  sessionId,
+                  branchId,
+                  timestamp: lineTimestamp,
+                  kind: "tool.result",
+                  actor: toolActor(toolNameByCallId.get(toolCallId)),
+                  payload: {
+                    toolCallId,
+                    output: record.content,
+                    isError: Boolean(record.is_error),
+                  },
+                  extensions: lineExtensions(line),
+                  native: native(`user.content[${partIndex}].tool_result`),
+                });
+                continue;
+              }
+
+              if (record.type === "text" && typeof record.text === "string") {
+                createEvent(events, {
+                  sessionId,
+                  branchId,
+                  timestamp: lineTimestamp,
+                  kind: "message.created",
+                  actor: { type: "user" },
+                  payload: { role: "user", parts: [{ type: "text", text: record.text }] },
+                  extensions: lineExtensions(line),
+                  native: native(`user.content[${partIndex}].text`),
+                });
+                continue;
+              }
+
+              if (record.type === "image") {
+                const source = record.source as Record<string, unknown> | undefined;
+                const data = typeof source?.data === "string" ? source.data : undefined;
+                const mediaType = typeof source?.media_type === "string" ? source.media_type : undefined;
+                if (data) {
+                  createEvent(events, {
+                    sessionId,
+                    branchId,
+                    timestamp: lineTimestamp,
+                    kind: "message.created",
+                    actor: { type: "user" },
+                    payload: {
+                      role: "user",
+                      parts: [{ type: "image", imageRef: data, mediaType }],
+                    },
+                    extensions: lineExtensions(line),
+                    native: native(`user.content[${partIndex}].image`),
+                  });
+                }
+              }
+            }
+          }
+          break;
+        }
+        case "assistant": {
+          const message = line.message as Record<string, unknown> | undefined;
+          const content = Array.isArray(message?.content) ? message?.content : [];
+          const cache = cacheFromClaudeMessage(message);
+
+          for (const [partIndex, part] of content.entries()) {
             if (!part || typeof part !== "object") continue;
             const record = part as Record<string, unknown>;
 
-            if (record.type === "tool_result") {
+            if (record.type === "thinking") {
               createEvent(events, {
                 sessionId,
                 branchId,
-                timestamp: toIsoTimestamp(line.timestamp),
-                kind: "tool.result",
-                actor: { type: "tool" },
+                timestamp: lineTimestamp,
+                kind: "reasoning.created",
+                actor: { type: "assistant" },
                 payload: {
-                  toolCallId: typeof record.tool_use_id === "string" ? record.tool_use_id : "unknown-tool-call",
-                  output: record.content,
-                  isError: Boolean(record.is_error),
+                  visibility: "full",
+                  text: typeof record.thinking === "string" ? record.thinking : undefined,
+                  providerExposed: true,
                 },
-                native,
+                cache,
+                extensions: lineExtensions(
+                  line,
+                  typeof record.signature === "string" ? { signature: record.signature } : undefined,
+                ),
+                native: native(`assistant.content[${partIndex}].thinking`),
               });
               continue;
             }
@@ -98,90 +272,147 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
               createEvent(events, {
                 sessionId,
                 branchId,
-                timestamp: toIsoTimestamp(line.timestamp),
+                timestamp: lineTimestamp,
                 kind: "message.created",
-                actor: { type: "user" },
-                payload: { role: "user", parts: [{ type: "text", text: record.text }] },
-                native,
+                actor: { type: "assistant" },
+                payload: { role: "assistant", parts: [{ type: "text", text: record.text }] },
+                cache,
+                extensions: lineExtensions(line),
+                native: native(`assistant.content[${partIndex}].text`),
               });
+              continue;
+            }
+
+            if (record.type === "tool_use") {
+              if (typeof record.id !== "string" || typeof record.name !== "string") {
+                createEvent(events, {
+                  sessionId,
+                  branchId,
+                  timestamp: lineTimestamp,
+                  kind: "provider.event",
+                  payload: {
+                    provider: "claude-code",
+                    eventType: "tool_use.invalid",
+                    raw: line,
+                  },
+                  cache,
+                  extensions: lineExtensions(line),
+                  native: native(`assistant.content[${partIndex}].tool_use.invalid`),
+                });
+                continue;
+              }
+              const toolCallId = record.id;
+              const toolName = record.name;
+              toolNameByCallId.set(toolCallId, toolName);
+              createEvent(events, {
+                sessionId,
+                branchId,
+                timestamp: lineTimestamp,
+                kind: "tool.call",
+                actor: {
+                  type: "assistant",
+                  toolName,
+                },
+                payload: {
+                  toolCallId,
+                  name: toolName,
+                  arguments: record.input,
+                },
+                cache,
+                extensions: lineExtensions(line),
+                native: native(`assistant.content[${partIndex}].tool_use`),
+              });
+              continue;
+            }
+
+            if (record.type === "image") {
+              const source = record.source as Record<string, unknown> | undefined;
+              const data = typeof source?.data === "string" ? source.data : undefined;
+              const mediaType = typeof source?.media_type === "string" ? source.media_type : undefined;
+              if (data) {
+                createEvent(events, {
+                  sessionId,
+                  branchId,
+                  timestamp: lineTimestamp,
+                  kind: "message.created",
+                  actor: { type: "assistant" },
+                  payload: {
+                    role: "assistant",
+                    parts: [{ type: "image", imageRef: data, mediaType }],
+                  },
+                  cache,
+                  extensions: lineExtensions(line),
+                  native: native(`assistant.content[${partIndex}].image`),
+                });
+              }
             }
           }
+          break;
         }
-        break;
-      }
-      case "assistant": {
-        const message = line.message as Record<string, unknown> | undefined;
-        const content = Array.isArray(message?.content) ? message?.content : [];
-
-        for (const part of content) {
-          if (!part || typeof part !== "object") continue;
-          const record = part as Record<string, unknown>;
-
-          if (record.type === "thinking") {
+        case "system": {
+          if (line.subtype === "model_change") {
+            if (typeof line.provider !== "string" || typeof line.model !== "string") {
+              createEvent(events, {
+                sessionId,
+                branchId,
+                timestamp: lineTimestamp,
+                kind: "provider.event",
+                payload: {
+                  provider: "claude-code",
+                  eventType: "model_change.invalid",
+                  raw: line,
+                },
+                extensions: lineExtensions(line),
+                native: native("system.model_change.invalid"),
+              });
+              break;
+            }
             createEvent(events, {
               sessionId,
               branchId,
-              timestamp: toIsoTimestamp(line.timestamp),
-              kind: "reasoning.created",
-              actor: { type: "assistant" },
+              timestamp: lineTimestamp,
+              kind: "model.selected",
               payload: {
-                visibility: "full",
-                text: typeof record.thinking === "string" ? record.thinking : undefined,
-                providerExposed: true,
+                provider: line.provider,
+                model: line.model,
               },
-              extensions: typeof record.signature === "string" ? { signature: record.signature } : undefined,
-              native,
+              extensions: lineExtensions(line),
+              native: native("system.model_change"),
             });
-            continue;
+            break;
           }
-
-          if (record.type === "text" && typeof record.text === "string") {
-            createEvent(events, {
-              sessionId,
-              branchId,
-              timestamp: toIsoTimestamp(line.timestamp),
-              kind: "message.created",
-              actor: { type: "assistant" },
-              payload: { role: "assistant", parts: [{ type: "text", text: record.text }] },
-              native,
-            });
-            continue;
-          }
-
-          if (record.type === "tool_use") {
-            createEvent(events, {
-              sessionId,
-              branchId,
-              timestamp: toIsoTimestamp(line.timestamp),
-              kind: "tool.call",
-              actor: {
-                type: "assistant",
-                toolName: typeof record.name === "string" ? record.name : undefined,
-              },
-              payload: {
-                toolCallId: typeof record.id === "string" ? record.id : "unknown-tool-call",
-                name: typeof record.name === "string" ? record.name : "unknown-tool",
-                arguments: record.input,
-              },
-              native,
-            });
-          }
+          createEvent(events, {
+            sessionId,
+            branchId,
+            timestamp: lineTimestamp,
+            kind: "provider.event",
+            payload: {
+              provider: "claude-code",
+              eventType: "system",
+              raw: line,
+            },
+            extensions: lineExtensions(line),
+            native: native(`system.${typeof line.subtype === "string" ? line.subtype : String(line.type)}`),
+          });
+          break;
         }
-        break;
+        default:
+          createEvent(events, {
+            sessionId,
+            branchId,
+            timestamp: lineTimestamp,
+            kind: "provider.event",
+            payload: {
+              provider: "claude-code",
+              eventType: typeof line.type === "string" ? line.type : "line.missing_type",
+              raw: line,
+            },
+            extensions: lineExtensions(line),
+            native: native(`line.${typeof line.type === "string" ? line.type : "missing_type"}`),
+          });
       }
-      default:
-        createEvent(events, {
-          sessionId,
-          branchId,
-          timestamp: toIsoTimestamp(line.timestamp),
-          kind: "provider.event",
-          payload: {
-            provider: "claude-code",
-            eventType: typeof line.type === "string" ? line.type : "unknown",
-            raw: line,
-          },
-          native,
-        });
+    } finally {
+      applyCanonicalOverridesToRange(events, overrides, beforeIndex);
     }
   }
 

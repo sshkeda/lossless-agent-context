@@ -1,331 +1,227 @@
-import { randomUUID } from "node:crypto";
-import type { CanonicalEvent } from "@lossless-agent-context/core";
+import type { CanonicalEvent, ContentPart } from "@lossless-agent-context/core";
+import { readStoredClaudeCodeIds, readStoredClaudeCodeIdsForGroup } from "./claude-code-ids";
 import {
-  emitSemanticGroupedLines,
+  emitTargetGroupedLines,
   FOREIGN_FIELD,
   type ForeignEnvelope,
   inferSessionIdForTarget,
   inferWorkingDirectory,
+  renderCanonicalEventLine,
 } from "./cross-provider";
+import { projectToolCallToClaude } from "./tool-projections";
+import { deterministicUuid, stringifyToolOutput } from "./utils";
+
+type ClaudeBlock = Record<string, unknown>;
+type StoredClaudeLineIds = {
+  uuid?: string;
+  parentUuid?: string | null;
+};
 
 export function exportClaudeCodeJsonl(events: CanonicalEvent[]): string {
   const sessionId = inferSessionIdForTarget(events, "claude-code");
   const cwd = inferWorkingDirectory(events);
+  const hasSessionEvent = events.some((event) => event.kind === "session.created");
   let parentUuid: string | null = null;
+  let emittedInit = false;
+  let syntheticInit: Record<string, unknown> | null = null;
+  let emittedIndex = 0;
 
-  const { lines } = emitSemanticGroupedLines(events, "claude-code", (source, group, native) => {
-    if (source === "pi") {
-      const claudeLine = renderPiGroupAsClaudeLine(group, native.raw, sessionId, cwd, parentUuid);
-      const uuidValue = claudeLine.uuid;
-      if (typeof uuidValue === "string") parentUuid = uuidValue;
-      return claudeLine;
+  function nextUuid(label: string, timestamp: string): string {
+    const seed = `${sessionId}:${label}:${timestamp}:${emittedIndex}`;
+    emittedIndex += 1;
+    return deterministicUuid(seed);
+  }
+
+  function readStoredClaudeIds(event: CanonicalEvent | undefined): StoredClaudeLineIds | undefined {
+    const record = readStoredClaudeCodeIds(event);
+    if (!record) return undefined;
+    const ids: StoredClaudeLineIds = {};
+    if (typeof record.uuid === "string") ids.uuid = record.uuid;
+    if (typeof record.parentUuid === "string" || record.parentUuid === null) ids.parentUuid = record.parentUuid;
+    return ids.uuid !== undefined || ids.parentUuid !== undefined ? ids : undefined;
+  }
+
+  function storedClaudeIdsForGroup(group: CanonicalEvent[]): StoredClaudeLineIds | undefined {
+    const record = readStoredClaudeCodeIdsForGroup(group);
+    if (!record) return undefined;
+    const ids: StoredClaudeLineIds = {};
+    if (typeof record.uuid === "string") ids.uuid = record.uuid;
+    if (typeof record.parentUuid === "string" || record.parentUuid === null) ids.parentUuid = record.parentUuid;
+    return ids.uuid !== undefined || ids.parentUuid !== undefined ? ids : undefined;
+  }
+
+  if (!hasSessionEvent) {
+    const first = events[0];
+    if (first?.native?.source && first.native.raw !== undefined) {
+      const preserved = readStoredClaudeIds(first);
+      syntheticInit = {
+        type: "system",
+        subtype: "init",
+        uuid: preserved?.uuid ?? nextUuid("synthetic-init", first.timestamp),
+        parentUuid: preserved?.parentUuid ?? null,
+        timestamp: first.timestamp,
+        sessionId,
+      };
+      syntheticInit[FOREIGN_FIELD] = { source: first.native.source, raw: first.native.raw };
+      if (cwd !== undefined) syntheticInit.cwd = cwd;
+      parentUuid = syntheticInit.uuid as string;
     }
-    if (source === "codex") {
-      const claudeLine = renderCodexGroupAsClaudeLine(group, native.raw, sessionId, cwd, parentUuid);
-      const uuidValue = claudeLine.uuid;
-      if (typeof uuidValue === "string") parentUuid = uuidValue;
-      return claudeLine;
+  }
+
+  function makeBase(
+    timestamp: string,
+    sidecar: ForeignEnvelope,
+    preserved?: StoredClaudeLineIds,
+  ): Record<string, unknown> {
+    const base: Record<string, unknown> = {
+      uuid: preserved?.uuid ?? nextUuid(String(sidecar.source), timestamp),
+      parentUuid: preserved?.parentUuid ?? parentUuid,
+      timestamp,
+      sessionId,
+    };
+    base[FOREIGN_FIELD] = sidecar;
+    if (cwd !== undefined) base.cwd = cwd;
+    return base;
+  }
+
+  function emit(line: Record<string, unknown>): Record<string, unknown> {
+    const uuidValue = line.uuid;
+    if (typeof uuidValue === "string") parentUuid = uuidValue;
+    return line;
+  }
+
+  const { lines } = emitTargetGroupedLines(events, "claude-code", (group, native) => {
+    const first = group[0];
+    if (!first) return null;
+    const ts = first.timestamp;
+    const preserved = storedClaudeIdsForGroup(group);
+
+    if (first.kind === "session.created") {
+      if (emittedInit) return null;
+      emittedInit = true;
+      const extVersion = first.extensions?.version;
+      return emit({
+        type: "system",
+        subtype: "init",
+        ...(typeof extVersion === "string" ? { version: extVersion } : {}),
+        ...makeBase(ts, native, preserved),
+      });
     }
-    return renderUnknownAsClaudeLine(source, native.raw, sessionId, cwd, parentUuid, group[0]?.timestamp);
+
+    if (first.kind === "model.selected") {
+      return emit({
+        type: "system",
+        subtype: "model_change",
+        provider: first.payload.provider,
+        model: first.payload.model,
+        ...makeBase(ts, native, preserved),
+      });
+    }
+
+    const assistantBlocks: ClaudeBlock[] = [];
+    const userBlocks: ClaudeBlock[] = [];
+    let userTextOnly = "";
+    let userTextOnlyCount = 0;
+
+    for (const event of group) {
+      if (event.kind === "reasoning.created") {
+        assistantBlocks.push({ type: "thinking", thinking: event.payload.text ?? "" });
+        continue;
+      }
+      if (event.kind === "tool.call") {
+        const projected = projectToolCallToClaude(event);
+        assistantBlocks.push({
+          type: "tool_use",
+          id: event.payload.toolCallId,
+          name: projected?.name ?? event.payload.name,
+          input: projected?.input ?? event.payload.arguments ?? {},
+        });
+        continue;
+      }
+      if (event.kind === "message.created") {
+        const role = event.payload.role;
+        const blocksForMessage: ClaudeBlock[] = event.payload.parts.map(partToClaudeBlock);
+        if (role === "assistant") {
+          for (const block of blocksForMessage) assistantBlocks.push(block);
+        } else {
+          for (const block of blocksForMessage) userBlocks.push(block);
+          if (blocksForMessage.every((b) => b.type === "text")) {
+            const text = blocksForMessage.map((b) => (typeof b.text === "string" ? b.text : "")).join("");
+            userTextOnly = userTextOnly.length > 0 ? `${userTextOnly}\n${text}` : text;
+            userTextOnlyCount++;
+          } else {
+            userTextOnly = "";
+            userTextOnlyCount = -1;
+          }
+        }
+        continue;
+      }
+      if (event.kind === "tool.result") {
+        userBlocks.push({
+          type: "tool_result",
+          tool_use_id: event.payload.toolCallId,
+          content: toolResultContentForClaude(event.payload.output),
+          is_error: event.payload.isError,
+        });
+      }
+    }
+
+    if (assistantBlocks.length > 0 && userBlocks.length === 0) {
+      return emit({
+        type: "assistant",
+        ...makeBase(ts, native, preserved),
+        message: { role: "assistant", content: assistantBlocks },
+      });
+    }
+
+    if (userBlocks.length > 0 && assistantBlocks.length === 0) {
+      const onlyText = userTextOnlyCount > 0 && userTextOnlyCount === userBlocks.length;
+      const content: string | ClaudeBlock[] = onlyText ? userTextOnly : userBlocks;
+      return emit({
+        type: "user",
+        ...makeBase(ts, native, preserved),
+        message: { role: "user", content },
+      });
+    }
+
+    const canonicalLines = group.map((event) => renderCanonicalEventLine(event, native));
+    return canonicalLines.length > 0 ? canonicalLines : null;
   });
+
+  if (syntheticInit) lines.unshift(JSON.stringify(syntheticInit));
 
   return lines.length === 0 ? "" : `${lines.join("\n")}\n`;
 }
 
-function buildClaudeBase(
-  sessionId: string,
-  cwd: string | undefined,
-  parentUuid: string | null,
-  isoTimestamp: string,
-  sidecar: ForeignEnvelope,
-): Record<string, unknown> {
-  const base: Record<string, unknown> = {
-    uuid: randomUUID(),
-    parentUuid,
-    timestamp: isoTimestamp,
-    sessionId,
-    [FOREIGN_FIELD]: sidecar,
-  };
-  if (cwd !== undefined) base.cwd = cwd;
-  return base;
-}
-
-function renderPiGroupAsClaudeLine(
-  group: CanonicalEvent[],
-  piRaw: unknown,
-  sessionId: string,
-  cwd: string | undefined,
-  parentUuid: string | null,
-): Record<string, unknown> {
-  const piLine = (piRaw && typeof piRaw === "object" ? piRaw : {}) as Record<string, unknown>;
-  const piType = piLine.type;
-  const sidecar: ForeignEnvelope = { source: "pi", raw: piRaw };
-  const isoTimestamp = group[0]?.timestamp ?? new Date(0).toISOString();
-  const base = buildClaudeBase(sessionId, cwd, parentUuid, isoTimestamp, sidecar);
-
-  if (piType === "session") {
-    return {
-      type: "system",
-      subtype: "init",
-      version: typeof piLine.version === "number" ? `pi-${piLine.version}` : "pi-unknown",
-      ...base,
-    };
-  }
-
-  if (piType === "model_change") {
-    return {
-      type: "system",
-      subtype: "model_change",
-      ...base,
-    };
-  }
-
-  if (piType === "message") {
-    const piMessage = piLine.message as Record<string, unknown> | undefined;
-    if (piMessage) {
-      const role = piMessage.role;
-
-      if (role === "user" || role === "system") {
-        return {
-          type: "user",
-          ...base,
-          message: { role: "user", content: renderUserContent(piMessage.content) },
-        };
-      }
-
-      if (role === "assistant") {
-        const piContent = Array.isArray(piMessage.content) ? piMessage.content : [];
-        const claudeContent = piContent.map(piAssistantBlockToClaude);
-        return {
-          type: "assistant",
-          ...base,
-          message: { role: "assistant", content: claudeContent },
-        };
-      }
-
-      if (role === "toolResult") {
-        const piContent = Array.isArray(piMessage.content) ? piMessage.content : [];
-        const text = extractText(piContent);
-        return {
-          type: "user",
-          ...base,
-          message: {
-            role: "user",
-            content: [
-              {
-                type: "tool_result",
-                tool_use_id: typeof piMessage.toolCallId === "string" ? piMessage.toolCallId : "unknown-tool-call",
-                content: text,
-                is_error: Boolean(piMessage.isError),
-              },
-            ],
-          },
-        };
-      }
-    }
-  }
-
-  return {
-    type: "system",
-    subtype: "pi-unknown",
-    ...base,
-  };
-}
-
-function renderCodexGroupAsClaudeLine(
-  group: CanonicalEvent[],
-  codexRaw: unknown,
-  sessionId: string,
-  cwd: string | undefined,
-  parentUuid: string | null,
-): Record<string, unknown> {
-  const codexLine = (codexRaw && typeof codexRaw === "object" ? codexRaw : {}) as Record<string, unknown>;
-  const sidecar: ForeignEnvelope = { source: "codex", raw: codexRaw };
-  const isoTimestamp = group[0]?.timestamp ?? new Date(0).toISOString();
-  const base = buildClaudeBase(sessionId, cwd, parentUuid, isoTimestamp, sidecar);
-
-  if (codexLine.type === "session_meta") {
-    const payload = codexLine.payload as Record<string, unknown> | undefined;
-    return {
-      type: "system",
-      subtype: "init",
-      version:
-        payload && typeof payload.model_provider === "string" ? `codex-${payload.model_provider}` : "codex-unknown",
-      ...base,
-    };
-  }
-
-  if (codexLine.type === "response_item") {
-    const item = codexLine.payload as Record<string, unknown> | undefined;
-    if (item) {
-      if (item.type === "message") {
-        const role = item.role;
-        const content = Array.isArray(item.content) ? item.content : [];
-        const text = content
-          .map((c) => {
-            if (!c || typeof c !== "object") return "";
-            const record = c as Record<string, unknown>;
-            if ((record.type === "input_text" || record.type === "output_text") && typeof record.text === "string")
-              return record.text;
-            return "";
-          })
-          .join("");
-        if (role === "assistant") {
-          return {
-            type: "assistant",
-            ...base,
-            message: { role: "assistant", content: [{ type: "text", text }] },
-          };
-        }
-        return {
-          type: "user",
-          ...base,
-          message: { role: "user", content: text },
-        };
-      }
-
-      if (item.type === "reasoning") {
-        const summary = Array.isArray(item.summary) ? item.summary : [];
-        const text = summary
-          .map((part) => {
-            if (!part || typeof part !== "object") return "";
-            const record = part as Record<string, unknown>;
-            return record.type === "summary_text" && typeof record.text === "string" ? record.text : "";
-          })
-          .filter(Boolean)
-          .join("\n\n");
-        return {
-          type: "assistant",
-          ...base,
-          message: { role: "assistant", content: [{ type: "thinking", thinking: text }] },
-        };
-      }
-
-      if (item.type === "function_call") {
-        return {
-          type: "assistant",
-          ...base,
-          message: {
-            role: "assistant",
-            content: [
-              {
-                type: "tool_use",
-                id: typeof item.call_id === "string" ? item.call_id : "unknown-tool-call",
-                name: typeof item.name === "string" ? item.name : "unknown-tool",
-                input: typeof item.arguments === "string" ? safeJson(item.arguments) : (item.arguments ?? {}),
-              },
-            ],
-          },
-        };
-      }
-
-      if (item.type === "function_call_output") {
-        return {
-          type: "user",
-          ...base,
-          message: {
-            role: "user",
-            content: [
-              {
-                type: "tool_result",
-                tool_use_id: typeof item.call_id === "string" ? item.call_id : "unknown-tool-call",
-                content: typeof item.output === "string" ? item.output : JSON.stringify(item.output ?? ""),
-                is_error: false,
-              },
-            ],
-          },
-        };
-      }
-    }
-  }
-
-  if (codexLine.type === "event_msg") {
-    const item = codexLine.payload as Record<string, unknown> | undefined;
-    if (item?.type === "agent_message" && typeof item.message === "string") {
+function partToClaudeBlock(part: ContentPart): ClaudeBlock {
+  switch (part.type) {
+    case "text":
+      return { type: "text", text: part.text };
+    case "image":
       return {
-        type: "assistant",
-        ...base,
-        message: { role: "assistant", content: [{ type: "text", text: item.message }] },
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: part.mediaType ?? "image/png",
+          data: part.imageRef,
+        },
       };
-    }
-    if (item?.type === "agent_reasoning" && typeof item.text === "string") {
+    case "file":
       return {
-        type: "assistant",
-        ...base,
-        message: { role: "assistant", content: [{ type: "thinking", thinking: item.text }] },
+        type: "text",
+        text: JSON.stringify({
+          fileId: part.fileId,
+          filename: part.filename ?? null,
+          mediaType: part.mediaType ?? null,
+        }),
       };
-    }
+    case "json":
+      return { type: "text", text: JSON.stringify(part.value) };
   }
-
-  return {
-    type: "system",
-    subtype: "codex-unknown",
-    ...base,
-  };
 }
 
-function renderUnknownAsClaudeLine(
-  source: string,
-  rawRef: unknown,
-  sessionId: string,
-  cwd: string | undefined,
-  parentUuid: string | null,
-  isoTimestamp: string | undefined,
-): Record<string, unknown> {
-  const sidecar: ForeignEnvelope = { source, raw: rawRef };
-  const base = buildClaudeBase(sessionId, cwd, parentUuid, isoTimestamp ?? new Date(0).toISOString(), sidecar);
-  return {
-    type: "system",
-    subtype: `${source}-unknown`,
-    ...base,
-  };
-}
-
-function piAssistantBlockToClaude(block: unknown): Record<string, unknown> {
-  if (!block || typeof block !== "object") return { type: "text", text: "" };
-  const record = block as Record<string, unknown>;
-  if (record.type === "thinking") {
-    return { type: "thinking", thinking: typeof record.thinking === "string" ? record.thinking : "" };
-  }
-  if (record.type === "text") {
-    return { type: "text", text: typeof record.text === "string" ? record.text : "" };
-  }
-  if (record.type === "toolCall") {
-    return {
-      type: "tool_use",
-      id: typeof record.id === "string" ? record.id : "unknown-tool-call",
-      name: typeof record.name === "string" ? record.name : "unknown-tool",
-      input: record.arguments ?? {},
-    };
-  }
-  return { type: "text", text: JSON.stringify(record) };
-}
-
-function renderUserContent(content: unknown): string | unknown[] {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    const text = extractText(content);
-    if (text.length > 0) return text;
-    return content;
-  }
-  return "";
-}
-
-function extractText(items: unknown[]): string {
-  return items
-    .map((item) => {
-      if (!item || typeof item !== "object") return "";
-      const record = item as Record<string, unknown>;
-      if (record.type === "text" && typeof record.text === "string") return record.text;
-      return "";
-    })
-    .join("");
-}
-
-function safeJson(value: string): unknown {
-  try {
-    return JSON.parse(value);
-  } catch {
-    return value;
-  }
+function toolResultContentForClaude(output: unknown): string | unknown[] {
+  if (typeof output === "string") return output;
+  if (Array.isArray(output)) return output;
+  return stringifyToolOutput(output);
 }

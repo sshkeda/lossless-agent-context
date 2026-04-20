@@ -1,97 +1,338 @@
 [
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000000",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 0,
     "timestamp": "2026-03-17T00:19:52.225Z",
-    "native": { "source": "claude-code", "raw": { "type": "system", "subtype": "init", "timestamp": "2026-03-17T00:19:52.225Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "version": "2.1.76" } },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "session",
+      "raw": {
+        "type": "system",
+        "subtype": "init",
+        "timestamp": "2026-03-17T00:19:52.225Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "version": "2.1.76"
+      }
+    },
+    "extensions": {
+      "version": "2.1.76"
+    },
     "kind": "session.created",
-    "payload": { "model": "2.1.76", "startedAt": "2026-03-17T00:19:52.225Z", "workingDirectory": "/tmp/lossless-agent-context" }
+    "payload": {
+      "startedAt": "2026-03-17T00:19:52.225Z",
+      "workingDirectory": "/tmp/lossless-agent-context"
+    }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000001",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 1,
     "timestamp": "2026-03-17T00:19:52.225Z",
-    "native": { "source": "claude-code", "raw": { "type": "system", "subtype": "init", "timestamp": "2026-03-17T00:19:52.225Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "version": "2.1.76" } },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "system.init",
+      "raw": {
+        "type": "system",
+        "subtype": "init",
+        "timestamp": "2026-03-17T00:19:52.225Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "version": "2.1.76"
+      }
+    },
     "kind": "provider.event",
-    "payload": { "provider": "claude-code", "eventType": "system", "raw": { "type": "system", "subtype": "init", "timestamp": "2026-03-17T00:19:52.225Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "version": "2.1.76" } }
+    "payload": {
+      "provider": "claude-code",
+      "eventType": "system",
+      "raw": {
+        "type": "system",
+        "subtype": "init",
+        "timestamp": "2026-03-17T00:19:52.225Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "version": "2.1.76"
+      }
+    }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000002",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 2,
     "timestamp": "2026-03-17T00:19:54.623Z",
-    "actor": { "type": "user" },
-    "native": { "source": "claude-code", "raw": { "type": "user", "timestamp": "2026-03-17T00:19:54.623Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "message": { "role": "user", "content": "what is admin creds?" } } },
+    "actor": {
+      "type": "user"
+    },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "user.message",
+      "raw": {
+        "type": "user",
+        "timestamp": "2026-03-17T00:19:54.623Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "message": {
+          "role": "user",
+          "content": "what is admin creds?"
+        }
+      }
+    },
     "kind": "message.created",
-    "payload": { "role": "user", "parts": [{ "type": "text", "text": "what is admin creds?" }] }
+    "payload": {
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "what is admin creds?"
+        }
+      ]
+    }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000003",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 3,
     "timestamp": "2026-03-17T00:19:58.464Z",
-    "actor": { "type": "assistant" },
-    "native": { "source": "claude-code", "raw": { "type": "assistant", "timestamp": "2026-03-17T00:19:58.464Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "message": { "role": "assistant", "content": [{ "type": "thinking", "thinking": "I should inspect the env docs first.", "signature": "sig_123" }, { "type": "text", "text": "Let me search the codebase for admin credential references." }, { "type": "tool_use", "id": "toolu_123", "name": "Grep", "input": { "pattern": "admin", "-i": true } }] } } },
-    "extensions": { "signature": "sig_123" },
+    "actor": {
+      "type": "assistant"
+    },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "assistant.content[0].thinking",
+      "raw": {
+        "type": "assistant",
+        "timestamp": "2026-03-17T00:19:58.464Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "I should inspect the env docs first.",
+              "signature": "sig_123"
+            },
+            {
+              "type": "text",
+              "text": "Let me search the codebase for admin credential references."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_123",
+              "name": "Grep",
+              "input": {
+                "pattern": "admin",
+                "-i": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    "extensions": {
+      "signature": "sig_123"
+    },
     "kind": "reasoning.created",
-    "payload": { "visibility": "full", "text": "I should inspect the env docs first.", "providerExposed": true }
+    "payload": {
+      "visibility": "full",
+      "text": "I should inspect the env docs first.",
+      "providerExposed": true
+    }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000004",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 4,
     "timestamp": "2026-03-17T00:19:58.464Z",
-    "actor": { "type": "assistant" },
-    "native": { "source": "claude-code", "raw": { "type": "assistant", "timestamp": "2026-03-17T00:19:58.464Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "message": { "role": "assistant", "content": [{ "type": "thinking", "thinking": "I should inspect the env docs first.", "signature": "sig_123" }, { "type": "text", "text": "Let me search the codebase for admin credential references." }, { "type": "tool_use", "id": "toolu_123", "name": "Grep", "input": { "pattern": "admin", "-i": true } }] } } },
+    "actor": {
+      "type": "assistant"
+    },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "assistant.content[1].text",
+      "raw": {
+        "type": "assistant",
+        "timestamp": "2026-03-17T00:19:58.464Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "I should inspect the env docs first.",
+              "signature": "sig_123"
+            },
+            {
+              "type": "text",
+              "text": "Let me search the codebase for admin credential references."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_123",
+              "name": "Grep",
+              "input": {
+                "pattern": "admin",
+                "-i": true
+              }
+            }
+          ]
+        }
+      }
+    },
     "kind": "message.created",
-    "payload": { "role": "assistant", "parts": [{ "type": "text", "text": "Let me search the codebase for admin credential references." }] }
+    "payload": {
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "Let me search the codebase for admin credential references."
+        }
+      ]
+    }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000005",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 5,
     "timestamp": "2026-03-17T00:19:58.464Z",
-    "actor": { "type": "assistant", "toolName": "Grep" },
-    "native": { "source": "claude-code", "raw": { "type": "assistant", "timestamp": "2026-03-17T00:19:58.464Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "message": { "role": "assistant", "content": [{ "type": "thinking", "thinking": "I should inspect the env docs first.", "signature": "sig_123" }, { "type": "text", "text": "Let me search the codebase for admin credential references." }, { "type": "tool_use", "id": "toolu_123", "name": "Grep", "input": { "pattern": "admin", "-i": true } }] } } },
+    "actor": {
+      "type": "assistant",
+      "toolName": "Grep"
+    },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "assistant.content[2].tool_use",
+      "raw": {
+        "type": "assistant",
+        "timestamp": "2026-03-17T00:19:58.464Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "I should inspect the env docs first.",
+              "signature": "sig_123"
+            },
+            {
+              "type": "text",
+              "text": "Let me search the codebase for admin credential references."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_123",
+              "name": "Grep",
+              "input": {
+                "pattern": "admin",
+                "-i": true
+              }
+            }
+          ]
+        }
+      }
+    },
     "kind": "tool.call",
-    "payload": { "toolCallId": "toolu_123", "name": "Grep", "arguments": { "pattern": "admin", "-i": true } }
+    "payload": {
+      "toolCallId": "toolu_123",
+      "name": "Grep",
+      "arguments": {
+        "pattern": "admin",
+        "-i": true
+      }
+    }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000006",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 6,
     "timestamp": "2026-03-17T00:19:58.481Z",
-    "actor": { "type": "tool" },
-    "native": { "source": "claude-code", "raw": { "type": "user", "timestamp": "2026-03-17T00:19:58.481Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "message": { "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "toolu_123", "content": "Found 27 files", "is_error": false }] } } },
+    "actor": {
+      "type": "tool",
+      "toolName": "Grep"
+    },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "user.content[0].tool_result",
+      "raw": {
+        "type": "user",
+        "timestamp": "2026-03-17T00:19:58.481Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": "toolu_123",
+              "content": "Found 27 files",
+              "is_error": false
+            }
+          ]
+        }
+      }
+    },
     "kind": "tool.result",
-    "payload": { "toolCallId": "toolu_123", "output": "Found 27 files", "isError": false }
+    "payload": {
+      "toolCallId": "toolu_123",
+      "output": "Found 27 files",
+      "isError": false
+    }
   },
   {
-    "schemaVersion": "0.0.1",
+    "schemaVersion": "0.0.2",
     "eventId": "claude-session-1:000007",
     "sessionId": "claude-session-1",
     "branchId": "main",
     "seq": 7,
     "timestamp": "2026-03-17T00:20:07.388Z",
-    "actor": { "type": "assistant" },
-    "native": { "source": "claude-code", "raw": { "type": "assistant", "timestamp": "2026-03-17T00:20:07.388Z", "sessionId": "claude-session-1", "cwd": "/tmp/lossless-agent-context", "message": { "role": "assistant", "content": [{ "type": "text", "text": "The admin credentials are set via environment variables." }] } } },
+    "actor": {
+      "type": "assistant"
+    },
+    "native": {
+      "source": "claude-code",
+      "rawRef": "assistant.content[0].text",
+      "raw": {
+        "type": "assistant",
+        "timestamp": "2026-03-17T00:20:07.388Z",
+        "sessionId": "claude-session-1",
+        "cwd": "/tmp/lossless-agent-context",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The admin credentials are set via environment variables."
+            }
+          ]
+        }
+      }
+    },
     "kind": "message.created",
-    "payload": { "role": "assistant", "parts": [{ "type": "text", "text": "The admin credentials are set via environment variables." }] }
+    "payload": {
+      "role": "assistant",
+      "parts": [
+        {
+          "type": "text",
+          "text": "The admin credentials are set via environment variables."
+        }
+      ]
+    }
   }
 ]
