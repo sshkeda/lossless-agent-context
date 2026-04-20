@@ -1,4 +1,4 @@
-export { inspectShadowAlignmentStrategy } from "./cross-provider";
+export { CANONICAL_EVENT_TYPE, inspectShadowAlignmentStrategy } from "./cross-provider";
 export { exportClaudeCodeJsonl } from "./export-claude-code";
 export { exportCodexJsonl } from "./export-codex";
 export { exportPiSessionJsonl } from "./export-pi";

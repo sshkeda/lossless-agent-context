@@ -1,4 +1,5 @@
 import {
+  CANONICAL_EVENT_TYPE,
   exportCodexJsonl,
   importClaudeCodeJsonl,
   importCodexJsonl,
@@ -15,8 +16,6 @@ import {
   codexSessionMetaLine,
   jsonRecord,
 } from "./sdk-schemas";
-
-const CANONICAL_EVENT_TYPE = "lac:event";
 
 function isCanonicalFallbackLine(line: Record<string, unknown>): boolean {
   return line.type === CANONICAL_EVENT_TYPE;
