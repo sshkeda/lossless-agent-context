@@ -134,8 +134,15 @@ function main(): void {
 
   const importer = IMPORTERS[from];
   const exporter = EXPORTERS[args.to];
-  const canonical = importer(raw);
-  const output = exporter(canonical);
+
+  let output: string;
+  try {
+    const canonical = importer(raw);
+    output = exporter(canonical);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    fail(`Failed to convert ${from} -> ${args.to}: ${message}`);
+  }
 
   if (args.output) {
     writeFileSync(args.output, output);
