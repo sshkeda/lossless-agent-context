@@ -33,39 +33,12 @@
       "dependencies": {
         "@lossless-agent-context/adapters": "workspace:*",
         "@lossless-agent-context/core": "workspace:*",
-        "@lossless-agent-context/projection-ai-sdk": "workspace:*",
-        "@lossless-agent-context/projection-openinference": "workspace:*",
-        "@lossless-agent-context/replay": "workspace:*",
         "zod": "^3.25.76",
       },
       "devDependencies": {
         "@anthropic-ai/claude-agent-sdk": "^0.2.112",
         "@mariozechner/pi-agent-core": "^0.67.5",
-        "@mariozechner/pi-ai": "^0.67.6",
         "@mariozechner/pi-coding-agent": "^0.67.5",
-      },
-    },
-    "packages/projection-ai-sdk": {
-      "name": "@lossless-agent-context/projection-ai-sdk",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lossless-agent-context/core": "workspace:*",
-        "zod": "^3.25.76",
-      },
-    },
-    "packages/projection-openinference": {
-      "name": "@lossless-agent-context/projection-openinference",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lossless-agent-context/core": "workspace:*",
-        "zod": "^3.25.76",
-      },
-    },
-    "packages/replay": {
-      "name": "@lossless-agent-context/replay",
-      "version": "0.0.1",
-      "dependencies": {
-        "@lossless-agent-context/core": "workspace:*",
       },
     },
   },
@@ -257,12 +230,6 @@
     "@lossless-agent-context/core": ["@lossless-agent-context/core@workspace:packages/core"],
 
     "@lossless-agent-context/e2e": ["@lossless-agent-context/e2e@workspace:packages/e2e"],
-
-    "@lossless-agent-context/projection-ai-sdk": ["@lossless-agent-context/projection-ai-sdk@workspace:packages/projection-ai-sdk"],
-
-    "@lossless-agent-context/projection-openinference": ["@lossless-agent-context/projection-openinference@workspace:packages/projection-openinference"],
-
-    "@lossless-agent-context/replay": ["@lossless-agent-context/replay@workspace:packages/replay"],
 
     "@mariozechner/clipboard": ["@mariozechner/clipboard@0.3.2", "", { "optionalDependencies": { "@mariozechner/clipboard-darwin-arm64": "0.3.2", "@mariozechner/clipboard-darwin-universal": "0.3.2", "@mariozechner/clipboard-darwin-x64": "0.3.2", "@mariozechner/clipboard-linux-arm64-gnu": "0.3.2", "@mariozechner/clipboard-linux-arm64-musl": "0.3.2", "@mariozechner/clipboard-linux-riscv64-gnu": "0.3.2", "@mariozechner/clipboard-linux-x64-gnu": "0.3.2", "@mariozechner/clipboard-linux-x64-musl": "0.3.2", "@mariozechner/clipboard-win32-arm64-msvc": "0.3.2", "@mariozechner/clipboard-win32-x64-msvc": "0.3.2" } }, "sha512-IHQpksNjo7EAtGuHFU+tbWDp5LarH3HU/8WiB9O70ZEoBPHOg0/6afwSLK0QyNMMmx4Bpi/zl6+DcBXe95nWYA=="],
 
@@ -754,7 +721,7 @@
 
     "loupe": ["loupe@3.2.1", "", {}, "sha512-CdzqowRJCeLU72bHvWqwRBBlLcMEtIvGrlvef74kMnV2AolS9Y8xUv1I0U/MNAWMhBlKIoyuEgoJ0t/bbwHbLQ=="],
 
-    "lru-cache": ["lru-cache@7.18.3", "", {}, "sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA=="],
+    "lru-cache": ["lru-cache@11.3.5", "", {}, "sha512-NxVFwLAnrd9i7KUBxC4DrUhmgjzOs+1Qm50D3oF1/oL+r1NpZ4gA7xvG0/zJ8evR7zIKn4vLf7qTNduWFtCrRw=="],
 
     "magic-string": ["magic-string@0.30.21", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.5" } }, "sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ=="],
 
@@ -1002,15 +969,13 @@
 
     "cliui/strip-ansi": ["strip-ansi@6.0.1", "", { "dependencies": { "ansi-regex": "^5.0.1" } }, "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A=="],
 
-    "hosted-git-info/lru-cache": ["lru-cache@11.3.5", "", {}, "sha512-NxVFwLAnrd9i7KUBxC4DrUhmgjzOs+1Qm50D3oF1/oL+r1NpZ4gA7xvG0/zJ8evR7zIKn4vLf7qTNduWFtCrRw=="],
-
     "node-fetch/data-uri-to-buffer": ["data-uri-to-buffer@4.0.1", "", {}, "sha512-0R9ikRb668HB7QDxT1vkpuUBtqc53YyAwMwGeUFKRojY/NWKvdZ+9UYtRfGmhqNbRkTSVpMbmyhXipFFv2cb/A=="],
 
     "p-retry/retry": ["retry@0.13.1", "", {}, "sha512-XQBQ3I8W1Cge0Seh+6gjj03LbmRFWuoszgK9ooCpwYIrhhoO80pfq4cUkU5DkknwfOfFteRwlZ56PYOGYyFWdg=="],
 
     "parse5-htmlparser2-tree-adapter/parse5": ["parse5@6.0.1", "", {}, "sha512-Ofn/CTFzRGTTxwpNEs9PP93gXShHcTq255nzRYSKe8AkVpZY7e1fpmTfOyoIvjP5HG7Z2ZM7VS9PPhQGW2pOpw=="],
 
-    "path-scurry/lru-cache": ["lru-cache@11.3.5", "", {}, "sha512-NxVFwLAnrd9i7KUBxC4DrUhmgjzOs+1Qm50D3oF1/oL+r1NpZ4gA7xvG0/zJ8evR7zIKn4vLf7qTNduWFtCrRw=="],
+    "proxy-agent/lru-cache": ["lru-cache@7.18.3", "", {}, "sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA=="],
 
     "string-width/strip-ansi": ["strip-ansi@6.0.1", "", { "dependencies": { "ansi-regex": "^5.0.1" } }, "sha512-Y38VPSHcqkFrCpFnQ9vuSXmquuv5oXOKpGeT6aGrr3o3Gc9AlVa6JBfUSOCnbxGGZF+/0ooI7KrPuUSztUdU5A=="],
 

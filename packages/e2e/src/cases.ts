@@ -1,10 +1,4 @@
-import {
-  type AiSdkMessageLike,
-  importAiSdkMessages,
-  importClaudeCodeJsonl,
-  importCodexJsonl,
-  importPiSessionJsonl,
-} from "@lossless-agent-context/adapters";
+import { importClaudeCodeJsonl, importCodexJsonl, importPiSessionJsonl } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 
 export type FixtureKind = "jsonl" | "json";
@@ -34,14 +28,5 @@ export const conversionCases: ConversionCase[] = [
     fixtureFile: "codex.jsonl",
     fixtureKind: "jsonl",
     importToCanonical: importCodexJsonl,
-  },
-  {
-    name: "ai-sdk",
-    fixtureFile: "ai-sdk.json",
-    fixtureKind: "json",
-    importToCanonical: (input) => {
-      const messages = JSON.parse(input) as AiSdkMessageLike[];
-      return importAiSdkMessages(messages, "ai-sdk-session-1");
-    },
   },
 ];

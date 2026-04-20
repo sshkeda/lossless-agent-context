@@ -1,7 +1,0 @@
-[
-  { "id": "ai-sdk-session-1:000001", "role": "user", "parts": [{ "type": "text", "text": "Find the project README" }] },
-  { "id": "ai-sdk-session-1:000002", "role": "assistant", "parts": [{ "type": "reasoning", "text": "I should inspect the repository root." }] },
-  { "id": "ai-sdk-session-1:000003", "role": "assistant", "parts": [{ "type": "tool-call", "toolCallId": "tc1", "toolName": "read", "input": { "path": "README.md" } }] },
-  { "id": "ai-sdk-session-1:000004", "role": "tool", "parts": [{ "type": "tool-result", "toolCallId": "tc1", "output": "# README", "isError": false }] },
-  { "id": "ai-sdk-session-1:000005", "role": "assistant", "parts": [{ "type": "text", "text": "I found the README." }] }
-]

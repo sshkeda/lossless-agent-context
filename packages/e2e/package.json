@@ -6,21 +6,18 @@
   "scripts": {
     "build": "mkdir -p dist && printf 'ok\n' > dist/.build && tsc --noEmit -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run",
-    "test:real-logs": "LAC_ENABLE_REAL_LOG_E2E=1 vitest run src/real-log.test.ts"
+    "test": "vitest run --exclude src/real-log.test.ts",
+    "test:portable": "vitest run --exclude src/real-log.test.ts",
+    "test:real-logs": "vitest run src/real-log.test.ts"
   },
   "dependencies": {
     "@lossless-agent-context/adapters": "workspace:*",
     "@lossless-agent-context/core": "workspace:*",
-    "@lossless-agent-context/projection-ai-sdk": "workspace:*",
-    "@lossless-agent-context/projection-openinference": "workspace:*",
-    "@lossless-agent-context/replay": "workspace:*",
     "zod": "^3.25.76"
   },
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.112",
     "@mariozechner/pi-agent-core": "^0.67.5",
-    "@mariozechner/pi-ai": "^0.67.6",
     "@mariozechner/pi-coding-agent": "^0.67.5"
   }
 }
