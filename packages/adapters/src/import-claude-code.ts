@@ -19,6 +19,10 @@ import {
 } from "./utils";
 
 type Extensions = Record<string, unknown> | undefined;
+type ResolvedClaudeLineTimestamp = {
+  synthetic: boolean;
+  value: string;
+};
 
 function lineExtensions(line: Record<string, unknown>, extra?: Record<string, unknown>): Extensions {
   const merged: Record<string, unknown> = {};
@@ -66,11 +70,42 @@ function cacheFromClaudeMessage(message: Record<string, unknown> | undefined): C
   };
 }
 
+function resolveClaudeLineTimestamp(line: Record<string, unknown>): ResolvedClaudeLineTimestamp {
+  if (typeof line.timestamp === "string") {
+    return {
+      synthetic: false,
+      value: toIsoTimestamp(line.timestamp, "Claude line timestamp"),
+    };
+  }
+
+  if (line.type === "file-history-snapshot") {
+    const snapshot = line.snapshot;
+    if (snapshot && typeof snapshot === "object" && !Array.isArray(snapshot)) {
+      const snapshotTimestamp = (snapshot as Record<string, unknown>).timestamp;
+      if (typeof snapshotTimestamp === "string") {
+        return {
+          synthetic: false,
+          value: toIsoTimestamp(snapshotTimestamp, "Claude line timestamp"),
+        };
+      }
+    }
+  }
+
+  if (line.type === "last-prompt" || line.type === "permission-mode") {
+    return {
+      synthetic: true,
+      value: new Date(0).toISOString(),
+    };
+  }
+
+  throw new Error("Invalid Claude line timestamp");
+}
+
 export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
   const lines = parseJsonl(text);
   const events: CanonicalEvent[] = [];
 
-  const firstNativeLine = lines.find((line) => !isForeignLine(line));
+  const firstNativeLine = lines.find((line) => !isForeignLine(line) && typeof line.sessionId === "string");
   let currentSessionId =
     typeof firstNativeLine?.sessionId === "string"
       ? firstNativeLine.sessionId
@@ -78,7 +113,12 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
   const createdSessions = new Set<string>();
   const toolNameByCallId = new Map<string, string>();
 
-  function ensureSession(line: Record<string, unknown>, sessionId: string) {
+  function ensureSession(
+    line: Record<string, unknown>,
+    sessionId: string,
+    sessionTimestamp: string,
+    syntheticTimestamp: boolean,
+  ) {
     if (createdSessions.has(sessionId)) return;
     createdSessions.add(sessionId);
     const native = withNativeRawRef(nativeForLine(line, "claude-code"), "session");
@@ -86,13 +126,16 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
     createEvent(events, {
       sessionId,
       branchId: DEFAULT_BRANCH_ID,
-      timestamp: toIsoTimestamp(line.timestamp, "Claude line timestamp"),
+      timestamp: sessionTimestamp,
       kind: "session.created",
       payload: {
-        startedAt: toIsoTimestamp(line.timestamp, "Claude line timestamp"),
+        startedAt: sessionTimestamp,
         workingDirectory: typeof line.cwd === "string" ? line.cwd : undefined,
       },
-      extensions: lineExtensions(line, version !== undefined ? { version } : undefined),
+      extensions: withSyntheticTimestampExtension(
+        lineExtensions(line, version !== undefined ? { version } : undefined),
+        syntheticTimestamp,
+      ),
       native,
     });
   }
@@ -103,10 +146,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
     const branchId = DEFAULT_BRANCH_ID;
     const beforeIndex = events.length;
     const overrides = readCanonicalOverrides(line);
-    const lineTimestamp =
-      line.type === "last-prompt" && typeof line.timestamp !== "string"
-        ? new Date(0).toISOString()
-        : toIsoTimestamp(line.timestamp, "Claude line timestamp");
+    const { synthetic: syntheticTimestamp, value: lineTimestamp } = resolveClaudeLineTimestamp(line);
     try {
       const embedded = importEmbeddedCrossProviderLine(
         line,
@@ -121,7 +161,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
         continue;
       }
 
-      if (line.type !== "last-prompt") ensureSession(line, sessionId);
+      if (line.type !== "last-prompt") ensureSession(line, sessionId, lineTimestamp, syntheticTimestamp);
       const baseNative = nativeForLine(line, "claude-code");
       const native = (rawRef?: string) => withNativeRawRef(baseNative, rawRef);
 
@@ -137,7 +177,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
               eventType: "last-prompt",
               raw: line,
             },
-            extensions: withSyntheticTimestampExtension(lineExtensions(line), typeof line.timestamp !== "string"),
+            extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
             native: native("last-prompt"),
           });
           break;
@@ -153,7 +193,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
               kind: "message.created",
               actor: { type: "user" },
               payload: { role: "user", parts: [{ type: "text", text: content }] },
-              extensions: lineExtensions(line),
+              extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
               native: native("user.message"),
             });
             break;
@@ -176,7 +216,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                       eventType: "tool_result.invalid",
                       raw: line,
                     },
-                    extensions: lineExtensions(line),
+                    extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                     native: native(`user.content[${partIndex}].tool_result.invalid`),
                   });
                   continue;
@@ -193,7 +233,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                     output: record.content,
                     isError: Boolean(record.is_error),
                   },
-                  extensions: lineExtensions(line),
+                  extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                   native: native(`user.content[${partIndex}].tool_result`),
                 });
                 continue;
@@ -207,7 +247,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                   kind: "message.created",
                   actor: { type: "user" },
                   payload: { role: "user", parts: [{ type: "text", text: record.text }] },
-                  extensions: lineExtensions(line),
+                  extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                   native: native(`user.content[${partIndex}].text`),
                 });
                 continue;
@@ -228,11 +268,25 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                       role: "user",
                       parts: [{ type: "image", imageRef: data, mediaType }],
                     },
-                    extensions: lineExtensions(line),
+                    extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                     native: native(`user.content[${partIndex}].image`),
                   });
                 }
+                continue;
               }
+
+              createEvent(events, {
+                sessionId,
+                branchId,
+                timestamp: lineTimestamp,
+                kind: "message.created",
+                actor: { type: "user" },
+                payload: { role: "user", parts: [{ type: "json", value: record }] },
+                extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
+                native: native(
+                  `user.content[${partIndex}].${typeof record.type === "string" ? record.type : "unknown"}`,
+                ),
+              });
             }
           }
           break;
@@ -259,9 +313,12 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                   providerExposed: true,
                 },
                 cache,
-                extensions: lineExtensions(
-                  line,
-                  typeof record.signature === "string" ? { signature: record.signature } : undefined,
+                extensions: withSyntheticTimestampExtension(
+                  lineExtensions(
+                    line,
+                    typeof record.signature === "string" ? { signature: record.signature } : undefined,
+                  ),
+                  syntheticTimestamp,
                 ),
                 native: native(`assistant.content[${partIndex}].thinking`),
               });
@@ -277,7 +334,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 actor: { type: "assistant" },
                 payload: { role: "assistant", parts: [{ type: "text", text: record.text }] },
                 cache,
-                extensions: lineExtensions(line),
+                extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                 native: native(`assistant.content[${partIndex}].text`),
               });
               continue;
@@ -296,7 +353,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                     raw: line,
                   },
                   cache,
-                  extensions: lineExtensions(line),
+                  extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                   native: native(`assistant.content[${partIndex}].tool_use.invalid`),
                 });
                 continue;
@@ -319,7 +376,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                   arguments: record.input,
                 },
                 cache,
-                extensions: lineExtensions(line),
+                extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                 native: native(`assistant.content[${partIndex}].tool_use`),
               });
               continue;
@@ -341,7 +398,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                     parts: [{ type: "image", imageRef: data, mediaType }],
                   },
                   cache,
-                  extensions: lineExtensions(line),
+                  extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                   native: native(`assistant.content[${partIndex}].image`),
                 });
               }
@@ -362,7 +419,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                   eventType: "model_change.invalid",
                   raw: line,
                 },
-                extensions: lineExtensions(line),
+                extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                 native: native("system.model_change.invalid"),
               });
               break;
@@ -376,7 +433,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 provider: line.provider,
                 model: line.model,
               },
-              extensions: lineExtensions(line),
+              extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
               native: native("system.model_change"),
             });
             break;
@@ -391,7 +448,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
               eventType: "system",
               raw: line,
             },
-            extensions: lineExtensions(line),
+            extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
             native: native(`system.${typeof line.subtype === "string" ? line.subtype : String(line.type)}`),
           });
           break;
@@ -407,7 +464,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
               eventType: typeof line.type === "string" ? line.type : "line.missing_type",
               raw: line,
             },
-            extensions: lineExtensions(line),
+            extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
             native: native(`line.${typeof line.type === "string" ? line.type : "missing_type"}`),
           });
       }

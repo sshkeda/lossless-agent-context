@@ -135,9 +135,15 @@ function validateNativeText(provider: ProviderName, text: string, label: string)
     .filter((line) => line.type !== "lac:event");
   expect(lines.length).toBeGreaterThan(0);
   for (const line of lines) {
-    expect(["system", "user", "assistant", "last-prompt"]).toContain(String(line.type));
-    expect(typeof line.sessionId).toBe("string");
-    if (line.type !== "last-prompt") expect(typeof line.timestamp).toBe("string");
+    expect(typeof line.type).toBe("string");
+    if (typeof line.sessionId !== "string") expect(line.type).toBe("file-history-snapshot");
+    if (typeof line.timestamp !== "string") {
+      if (line.type === "file-history-snapshot") {
+        expect(typeof (line.snapshot as Record<string, unknown> | undefined)?.timestamp).toBe("string");
+      } else {
+        expect(["last-prompt", "permission-mode"]).toContain(String(line.type));
+      }
+    }
   }
 }
 

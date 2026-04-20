@@ -216,6 +216,14 @@ function partToClaudeBlock(part: ContentPart): ClaudeBlock {
         }),
       };
     case "json":
+      if (
+        part.value &&
+        typeof part.value === "object" &&
+        !Array.isArray(part.value) &&
+        typeof (part.value as Record<string, unknown>).type === "string"
+      ) {
+        return part.value as ClaudeBlock;
+      }
       return { type: "text", text: JSON.stringify(part.value) };
   }
 }

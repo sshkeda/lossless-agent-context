@@ -15,11 +15,22 @@ describe("Claude real native shape corpus", () => {
     expect(lines.length).toBeGreaterThan(0);
 
     for (const line of lines) {
-      expect(["user", "assistant", "system", "queue-operation", "attachment", "last-prompt"]).toContain(
-        String(line.type),
-      );
-      expect(typeof line.sessionId).toBe("string");
-      if (line.type !== "last-prompt") expect(typeof line.timestamp).toBe("string");
+      expect([
+        "user",
+        "assistant",
+        "system",
+        "queue-operation",
+        "attachment",
+        "last-prompt",
+        "permission-mode",
+        "file-history-snapshot",
+      ]).toContain(String(line.type));
+      if (line.type !== "file-history-snapshot") expect(typeof line.sessionId).toBe("string");
+      if (line.type === "file-history-snapshot") {
+        expect(typeof (line.snapshot as Record<string, unknown> | undefined)?.timestamp).toBe("string");
+      } else if (line.type !== "last-prompt" && line.type !== "permission-mode") {
+        expect(typeof line.timestamp).toBe("string");
+      }
       if (line.type === "assistant" || line.type === "user") {
         expect(typeof line.uuid).toBe("string");
         expect(typeof (line.message as Record<string, unknown> | undefined)?.role).toBe("string");
@@ -57,7 +68,7 @@ describe("Claude real native shape corpus", () => {
     );
   });
 
-  it("preserves harvested Claude queue, attachment, and last-prompt shapes as provider events", () => {
+  it("preserves harvested Claude queue, attachment, last-prompt, permission-mode, and file-history-snapshot shapes as provider events", () => {
     const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"));
     const providerEvents = events.filter(
       (event): event is Extract<CanonicalEvent, { kind: "provider.event" }> => event.kind === "provider.event",
@@ -67,6 +78,8 @@ describe("Claude real native shape corpus", () => {
     expect(eventTypes.has("queue-operation")).toBe(true);
     expect(eventTypes.has("attachment")).toBe(true);
     expect(eventTypes.has("last-prompt")).toBe(true);
+    expect(eventTypes.has("permission-mode")).toBe(true);
+    expect(eventTypes.has("file-history-snapshot")).toBe(true);
   });
 
   it("imports harvested Claude sdk-cli user/tool/text/thinking variants into canonical events", () => {

@@ -347,6 +347,83 @@ ${JSON.stringify({
     expect(firstPart && "text" in firstPart ? firstPart.text : undefined).toBe("real-user-line");
   });
 
+  it("preserves Claude permission-mode lines as provider events with synthetic timestamps", () => {
+    const text = `${JSON.stringify({
+      type: "permission-mode",
+      permissionMode: "bypassPermissions",
+      sessionId: "claude-a",
+    })}
+${JSON.stringify({
+  type: "user",
+  timestamp: TS,
+  sessionId: "claude-a",
+  cwd: "/tmp/a",
+  message: { role: "user", content: "real-user-line" },
+})}
+`;
+    const events = importClaudeCodeJsonl(text);
+
+    const sessions = events.filter(
+      (event): event is Extract<(typeof events)[number], { kind: "session.created" }> =>
+        event.kind === "session.created",
+    );
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.sessionId).toBe("claude-a");
+    expect(sessions[0]?.timestamp).toBe("1970-01-01T00:00:00.000Z");
+    expect(sessions[0]?.extensions).toEqual({ "lac:syntheticTimestamp": true });
+
+    const preserved = events.find(
+      (event): event is Extract<(typeof events)[number], { kind: "provider.event" }> =>
+        event.kind === "provider.event" && event.payload.eventType === "permission-mode",
+    );
+    expect(preserved).toBeDefined();
+    if (preserved?.kind !== "provider.event") throw new Error("type narrowing");
+    expect(preserved.timestamp).toBe("1970-01-01T00:00:00.000Z");
+    expect(preserved.extensions).toEqual({ "lac:syntheticTimestamp": true });
+    expect(preserved.payload.provider).toBe("claude-code");
+  });
+
+  it("imports leading Claude file-history-snapshot lines using snapshot.timestamp and the later real sessionId", () => {
+    const text = `${JSON.stringify({
+      type: "file-history-snapshot",
+      messageId: "msg-1",
+      snapshot: {
+        messageId: "msg-1",
+        trackedFileBackups: {},
+        timestamp: TS,
+      },
+      isSnapshotUpdate: false,
+    })}
+${JSON.stringify({
+  type: "user",
+  timestamp: TS,
+  sessionId: "claude-a",
+  cwd: "/tmp/a",
+  message: { role: "user", content: "real-user-line" },
+})}
+`;
+    const events = importClaudeCodeJsonl(text);
+
+    const sessions = events.filter(
+      (event): event is Extract<(typeof events)[number], { kind: "session.created" }> =>
+        event.kind === "session.created",
+    );
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]?.sessionId).toBe("claude-a");
+    expect(sessions[0]?.timestamp).toBe(TS);
+
+    const preserved = events.find(
+      (event): event is Extract<(typeof events)[number], { kind: "provider.event" }> =>
+        event.kind === "provider.event" && event.payload.eventType === "file-history-snapshot",
+    );
+    expect(preserved).toBeDefined();
+    if (preserved?.kind !== "provider.event") throw new Error("type narrowing");
+    expect(preserved.sessionId).toBe("claude-a");
+    expect(preserved.timestamp).toBe(TS);
+    expect(preserved.extensions).toBeUndefined();
+    expect(preserved.payload.provider).toBe("claude-code");
+  });
+
   it("rejects exporting a mixed-session canonical array to a single native JSONL target", () => {
     const events = [
       event({
