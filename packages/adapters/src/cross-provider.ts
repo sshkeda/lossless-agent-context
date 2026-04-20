@@ -331,9 +331,14 @@ export function buildCanonicalOverrideAgainstShadow(
     hasOverride = true;
   }
 
-  if (full.extensions && !jsonEqual(shadow.extensions, full.extensions)) {
-    filtered.extensions = full.extensions;
-    hasOverride = true;
+  if (full.extensions) {
+    const shadowExtensions = shadow.extensions
+      ? Object.fromEntries(Object.entries(shadow.extensions).filter(([key]) => key !== CLAUDE_CODE_IDS_EXTENSION))
+      : undefined;
+    if (!jsonEqual(shadowExtensions, full.extensions)) {
+      filtered.extensions = full.extensions;
+      hasOverride = true;
+    }
   }
 
   return hasOverride ? filtered : null;
