@@ -1,0 +1,17 @@
+{
+  "name": "@lossless-agent-context/cli",
+  "version": "0.0.1",
+  "type": "module",
+  "bin": {
+    "lac": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "mkdir -p dist && printf 'ok\n' > dist/.build",
+    "check": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@lossless-agent-context/adapters": "workspace:*",
+    "@lossless-agent-context/core": "workspace:*"
+  }
+}

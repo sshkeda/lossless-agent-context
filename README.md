@@ -4,8 +4,26 @@ Lossless session switching between Claude Code, Codex, and Pi.
 
 Each of those tools stores its session context in its own native JSONL shape. This repo converts between them without dropping information, so you can hot-swap a session from one tool to another and keep working.
 
+## Usage
+
+```bash
+bun install
+
+# Pi -> Claude Code
+bun packages/cli/src/index.ts convert session.jsonl --to claude-code -o claude.jsonl
+
+# stdin piping, auto-detected source
+cat session.jsonl | bun packages/cli/src/index.ts convert - --to codex
+
+# explicit source
+bun packages/cli/src/index.ts convert session.jsonl --from pi --to codex
+```
+
+Providers: `pi` | `claude-code` | `codex`. `--from` is auto-detected from the first JSONL line if omitted.
+
 ## Packages
 
+- `@lossless-agent-context/cli` — `lac convert` CLI
 - `@lossless-agent-context/core` — canonical event schema
 - `@lossless-agent-context/adapters` — Pi / Claude Code / Codex JSONL importers + exporters
 - `@lossless-agent-context/e2e` — fixture-driven integration tests

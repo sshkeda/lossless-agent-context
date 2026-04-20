@@ -20,6 +20,17 @@
         "zod": "^3.25.76",
       },
     },
+    "packages/cli": {
+      "name": "@lossless-agent-context/cli",
+      "version": "0.0.1",
+      "bin": {
+        "lac": "./dist/index.js",
+      },
+      "dependencies": {
+        "@lossless-agent-context/adapters": "workspace:*",
+        "@lossless-agent-context/core": "workspace:*",
+      },
+    },
     "packages/core": {
       "name": "@lossless-agent-context/core",
       "version": "0.0.1",
@@ -226,6 +237,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.5.5", "", {}, "sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og=="],
 
     "@lossless-agent-context/adapters": ["@lossless-agent-context/adapters@workspace:packages/adapters"],
+
+    "@lossless-agent-context/cli": ["@lossless-agent-context/cli@workspace:packages/cli"],
 
     "@lossless-agent-context/core": ["@lossless-agent-context/core@workspace:packages/core"],
 
