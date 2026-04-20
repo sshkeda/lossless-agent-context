@@ -4,10 +4,6 @@ import { CANONICAL_SCHEMA_VERSION, canonicalEventSchema } from "@lossless-agent-
 
 export { DEFAULT_BRANCH_ID } from "./defaults";
 
-export function parseJsonl(text: string): Array<Record<string, unknown>> {
-  return parseJsonlWithText(text).map((entry) => entry.line);
-}
-
 export function parseJsonlWithText(text: string): Array<{ line: Record<string, unknown>; text: string }> {
   return text
     .split(/\r?\n/)
@@ -41,10 +37,6 @@ export function epochMillisToIso(value: number, label = "timestamp"): string {
   const date = new Date(value);
   if (!Number.isNaN(date.getTime())) return date.toISOString();
   throw new Error(`Invalid ${label}`);
-}
-
-export function epochSecondsToIso(value: number, label = "timestamp"): string {
-  return epochMillisToIso(value * 1000, label);
 }
 
 export function isoTimestampToEpochMs(value: string, label = "timestamp"): number {

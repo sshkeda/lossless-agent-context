@@ -9,9 +9,8 @@
     "build": "turbo run build",
     "check": "turbo run check",
     "test": "turbo run test",
-    "test:portable": "bun run test",
     "test:real-logs": "bun run --filter=@lossless-agent-context/e2e test:real-logs",
-    "verify:portable": "bun run lint && bun run check && bun run test:portable",
+    "verify:portable": "bun run lint && bun run check && bun run test",
     "lint": "biome check .",
     "lint:fix": "biome check --write ."
   },

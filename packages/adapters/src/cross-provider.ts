@@ -148,13 +148,6 @@ function jsonEqual(a: unknown, b: unknown): boolean {
 
 export type ShadowAlignmentStrategy = "rawRef" | "sequential" | "kind_bucket";
 
-export type AlignmentStrategyCounts = {
-  totalGroups: number;
-  rawRef: number;
-  sequential: number;
-  kindBucket: number;
-};
-
 function alignShadowEventsWithStrategy(
   events: CanonicalEvent[],
   shadowEvents: CanonicalEvent[],
@@ -217,58 +210,6 @@ export function inspectShadowAlignmentStrategy(
   shadowEvents: CanonicalEvent[],
 ): ShadowAlignmentStrategy {
   return alignShadowEventsWithStrategy(events, shadowEvents).strategy;
-}
-
-export function inspectSameProviderAlignmentStrategies(
-  events: CanonicalEvent[],
-  target: string,
-): AlignmentStrategyCounts {
-  const counts: AlignmentStrategyCounts = {
-    totalGroups: 0,
-    rawRef: 0,
-    sequential: 0,
-    kindBucket: 0,
-  };
-
-  let i = 0;
-  while (i < events.length) {
-    const event = events[i];
-    if (!event) {
-      i++;
-      continue;
-    }
-    const native = event.native;
-    if (!native?.source || native.raw === undefined || native.source !== target) {
-      i++;
-      continue;
-    }
-
-    const groupRawJson = JSON.stringify(native.raw);
-    const sameGroup: CanonicalEvent[] = [event];
-    let k = i + 1;
-    while (k < events.length) {
-      const next = events[k];
-      if (!next) break;
-      const nextNative = next.native;
-      if (!nextNative || nextNative.source !== native.source) break;
-      if (nextNative.raw !== native.raw && JSON.stringify(nextNative.raw) !== groupRawJson) break;
-      sameGroup.push(next);
-      k++;
-    }
-    i = k;
-
-    const nativeBacked = sameGroup.filter((candidate) => !CANONICAL_ONLY_KINDS.has(candidate.kind));
-    if (nativeBacked.length === 0) continue;
-
-    const shadowEvents = reimportForeignRaw({ source: native.source, raw: native.raw });
-    const strategy = alignShadowEventsWithStrategy(nativeBacked, shadowEvents).strategy;
-    counts.totalGroups += 1;
-    if (strategy === "rawRef") counts.rawRef += 1;
-    else if (strategy === "sequential") counts.sequential += 1;
-    else counts.kindBucket += 1;
-  }
-
-  return counts;
 }
 
 function stripInternalNativeOverride(override: CanonicalOverride | null): CanonicalOverride | null {

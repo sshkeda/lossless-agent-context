@@ -17,7 +17,6 @@
       "version": "0.0.1",
       "dependencies": {
         "@lossless-agent-context/core": "workspace:*",
-        "zod": "^3.25.76",
       },
     },
     "packages/cli": {

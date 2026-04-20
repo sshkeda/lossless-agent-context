@@ -7,7 +7,6 @@
     "build": "mkdir -p dist && printf 'ok\n' > dist/.build && tsc --noEmit -p tsconfig.json",
     "check": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run --exclude src/real-log.test.ts",
-    "test:portable": "vitest run --exclude src/real-log.test.ts",
     "test:real-logs": "vitest run src/real-log.test.ts"
   },
   "dependencies": {

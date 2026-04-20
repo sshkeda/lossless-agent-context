@@ -16,7 +16,6 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@lossless-agent-context/core": "workspace:*",
-    "zod": "^3.25.76"
+    "@lossless-agent-context/core": "workspace:*"
   }
 }
