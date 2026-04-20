@@ -21,6 +21,7 @@ const CANONICAL_ONLY_KINDS: ReadonlySet<CanonicalEvent["kind"]> = new Set([
 export type ForeignEnvelope = {
   source: string;
   raw: unknown;
+  rawText?: string;
 };
 
 export type CanonicalOverride = {
@@ -479,11 +480,14 @@ export function readForeignEnvelope(line: Record<string, unknown>): ForeignEnvel
   if (!candidate || typeof candidate !== "object") return undefined;
   const record = candidate as Record<string, unknown>;
   if (typeof record.source !== "string") return undefined;
-  return { source: record.source, raw: record.raw };
+  const rawText = typeof record.rawText === "string" ? record.rawText : undefined;
+  return rawText !== undefined
+    ? { source: record.source, raw: record.raw, rawText }
+    : { source: record.source, raw: record.raw };
 }
 
 export function reimportForeignRaw(envelope: ForeignEnvelope): CanonicalEvent[] {
-  const jsonl = JSON.stringify(envelope.raw);
+  const jsonl = envelope.rawText ?? JSON.stringify(envelope.raw);
   switch (envelope.source) {
     case "pi":
       return importPiSessionJsonl(jsonl);
@@ -605,6 +609,8 @@ export function emitTargetGroupedLines(
           Object.assign(clone, native.raw);
           clone[CANONICAL_OVERRIDE_FIELD] = overrides.map((o) => o ?? {});
           pushLine(JSON.stringify(clone));
+        } else if (typeof native.rawText === "string") {
+          pushLine(native.rawText);
         } else {
           pushLine(JSON.stringify(native.raw));
         }
@@ -625,7 +631,10 @@ export function emitTargetGroupedLines(
       j++;
     }
 
-    const envelope: ForeignEnvelope = { source: native.source, raw: native.raw };
+    const envelope: ForeignEnvelope =
+      typeof native.rawText === "string"
+        ? { source: native.source, raw: native.raw, rawText: native.rawText }
+        : { source: native.source, raw: native.raw };
     const result = renderGroup(group, envelope);
     i = j;
     if (result === null) continue;

@@ -5,6 +5,10 @@ import { CANONICAL_SCHEMA_VERSION, canonicalEventSchema } from "@lossless-agent-
 export { DEFAULT_BRANCH_ID } from "./defaults";
 
 export function parseJsonl(text: string): Array<Record<string, unknown>> {
+  return parseJsonlWithText(text).map((entry) => entry.line);
+}
+
+export function parseJsonlWithText(text: string): Array<{ line: Record<string, unknown>; text: string }> {
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -20,7 +24,7 @@ export function parseJsonl(text: string): Array<Record<string, unknown>> {
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error(`Invalid JSONL at line ${index + 1}: expected an object`);
       }
-      return parsed as Record<string, unknown>;
+      return { line: parsed as Record<string, unknown>, text: line };
     });
 }
 
@@ -144,15 +148,22 @@ export function toolActor(toolName?: string): { type: "tool"; toolName?: string 
   return toolName ? { type: "tool", toolName } : { type: "tool" };
 }
 
-export function nativeForLine(line: Record<string, unknown>, defaultSource: string): { source: string; raw: unknown } {
+export function nativeForLine(
+  line: Record<string, unknown>,
+  defaultSource: string,
+  rawText?: string,
+): { source: string; raw: unknown; rawText?: string } {
   const sidecar = line.__lac_foreign;
   if (sidecar && typeof sidecar === "object" && !Array.isArray(sidecar)) {
     const record = sidecar as Record<string, unknown>;
     if (typeof record.source === "string") {
-      return { source: record.source, raw: record.raw };
+      const foreignRawText = typeof record.rawText === "string" ? record.rawText : undefined;
+      return foreignRawText !== undefined
+        ? { source: record.source, raw: record.raw, rawText: foreignRawText }
+        : { source: record.source, raw: record.raw };
     }
   }
-  return { source: defaultSource, raw: line };
+  return rawText !== undefined ? { source: defaultSource, raw: line, rawText } : { source: defaultSource, raw: line };
 }
 
 export function withNativeRawRef<T extends { source: string; raw: unknown }>(

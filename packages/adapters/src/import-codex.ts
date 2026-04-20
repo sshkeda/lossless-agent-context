@@ -10,7 +10,7 @@ import {
   createEvent,
   DEFAULT_BRANCH_ID,
   nativeForLine,
-  parseJsonl,
+  parseJsonlWithText,
   parseStrictJson,
   syntheticSessionId,
   toIsoTimestamp,
@@ -122,7 +122,8 @@ function citationsFromCodexAnnotations(value: unknown): Citation[] | undefined {
 }
 
 export function importCodexJsonl(text: string): CanonicalEvent[] {
-  const lines = parseJsonl(text);
+  const entries = parseJsonlWithText(text);
+  const lines = entries.map((entry) => entry.line);
   const events: CanonicalEvent[] = [];
 
   const sessionMeta = lines.find((line) => line.type === "session_meta") as Record<string, unknown> | undefined;
@@ -130,7 +131,8 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
   let currentSessionId = typeof metaPayload?.id === "string" ? metaPayload.id : syntheticSessionId("codex", text);
   const toolNameByCallId = new Map<string, string>();
 
-  for (const line of lines) {
+  for (const entry of entries) {
+    const { line, text: lineText } = entry;
     if (line.type === "session_meta") {
       const linePayload = line.payload as Record<string, unknown> | undefined;
       if (typeof linePayload?.id === "string") currentSessionId = linePayload.id;
@@ -157,7 +159,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
       if (line.type === "session_meta") {
         const linePayload = line.payload as Record<string, unknown> | undefined;
         if (linePayload) {
-          const native = withNativeRawRef(nativeForLine(line, "codex"), "session_meta");
+          const native = withNativeRawRef(nativeForLine(line, "codex", lineText), "session_meta");
           createEvent(events, {
             sessionId,
             branchId,
@@ -178,7 +180,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
         continue;
       }
 
-      const baseNative = nativeForLine(line, "codex");
+      const baseNative = nativeForLine(line, "codex", lineText);
       const native = (rawRef?: string) => withNativeRawRef(baseNative, rawRef);
 
       if (line.type === "response_item") {

@@ -26,6 +26,7 @@ export const nativeRefSchema = z.object({
   formatVersion: z.string().optional(),
   rawRef: z.string().optional(),
   raw: z.unknown().optional(),
+  rawText: z.string().optional(),
 });
 
 export const citationSchema = z.discriminatedUnion("type", [
