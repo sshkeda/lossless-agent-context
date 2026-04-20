@@ -10,7 +10,7 @@ import {
   DEFAULT_BRANCH_ID,
   epochMillisToIso,
   nativeForLine,
-  parseJsonl,
+  parseJsonlWithText,
   syntheticSessionId,
   toIsoTimestamp,
   withNativeRawRef,
@@ -117,13 +117,15 @@ function piTimestamp(value: unknown, label = "Pi timestamp"): string {
 }
 
 export function importPiSessionJsonl(text: string): CanonicalEvent[] {
-  const lines = parseJsonl(text);
+  const entries = parseJsonlWithText(text);
+  const lines = entries.map((entry) => entry.line);
   const events: CanonicalEvent[] = [];
 
   const sessionHeader = lines.find((line) => line.type === "session") as Record<string, unknown> | undefined;
   let currentSessionId = typeof sessionHeader?.id === "string" ? sessionHeader.id : syntheticSessionId("pi", text);
 
-  for (const line of lines) {
+  for (const entry of entries) {
+    const { line, text: lineText } = entry;
     if (line.type === "session" && typeof line.id === "string") currentSessionId = line.id;
     const sessionId = currentSessionId;
     const branchId = DEFAULT_BRANCH_ID;
@@ -143,7 +145,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
         continue;
       }
 
-      const baseNative = nativeForLine(line, "pi");
+      const baseNative = nativeForLine(line, "pi", lineText);
       const native = (rawRef?: string) => withNativeRawRef(baseNative, rawRef);
       const extensions = lineExtensions(line);
 

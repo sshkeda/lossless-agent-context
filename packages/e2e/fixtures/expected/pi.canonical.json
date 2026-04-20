@@ -15,7 +15,8 @@
         "id": "pi-session-1",
         "timestamp": "2026-04-15T23:29:28.744Z",
         "cwd": "/tmp/lossless-agent-context"
-      }
+      },
+      "rawText": "{\"type\":\"session\",\"version\":3,\"id\":\"pi-session-1\",\"timestamp\":\"2026-04-15T23:29:28.744Z\",\"cwd\":\"/tmp/lossless-agent-context\"}"
     },
     "extensions": {
       "version": "3"
@@ -43,7 +44,8 @@
         "timestamp": "2026-04-15T23:29:29.133Z",
         "provider": "claude-code",
         "modelId": "claude-opus-4-6"
-      }
+      },
+      "rawText": "{\"type\":\"model_change\",\"id\":\"a3fbf1b9\",\"parentId\":null,\"timestamp\":\"2026-04-15T23:29:29.133Z\",\"provider\":\"claude-code\",\"modelId\":\"claude-opus-4-6\"}"
     },
     "kind": "model.selected",
     "payload": {
@@ -79,7 +81,8 @@
           ],
           "timestamp": 1776295775645
         }
-      }
+      },
+      "rawText": "{\"type\":\"message\",\"id\":\"e516b1fd\",\"parentId\":\"a3fbf1b9\",\"timestamp\":\"2026-04-15T23:29:35.652Z\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"spin up the dev server pls\"}],\"timestamp\":1776295775645}}"
     },
     "kind": "message.created",
     "payload": {
@@ -132,7 +135,8 @@
           "stopReason": "toolUse",
           "timestamp": 1776295775652
         }
-      }
+      },
+      "rawText": "{\"type\":\"message\",\"id\":\"e8902860\",\"parentId\":\"e516b1fd\",\"timestamp\":\"2026-04-15T23:29:35.664Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Need to start the dev server.\"},{\"type\":\"toolCall\",\"id\":\"call_1\",\"name\":\"ask_claude_code\",\"arguments\":{\"input\":\"spin up the dev server pls\"}}],\"api\":\"claude-code-mock-api\",\"provider\":\"claude-code\",\"model\":\"claude-opus-4-6\",\"stopReason\":\"toolUse\",\"timestamp\":1776295775652}}"
     },
     "kind": "reasoning.created",
     "payload": {
@@ -182,7 +186,8 @@
           "stopReason": "toolUse",
           "timestamp": 1776295775652
         }
-      }
+      },
+      "rawText": "{\"type\":\"message\",\"id\":\"e8902860\",\"parentId\":\"e516b1fd\",\"timestamp\":\"2026-04-15T23:29:35.664Z\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"Need to start the dev server.\"},{\"type\":\"toolCall\",\"id\":\"call_1\",\"name\":\"ask_claude_code\",\"arguments\":{\"input\":\"spin up the dev server pls\"}}],\"api\":\"claude-code-mock-api\",\"provider\":\"claude-code\",\"model\":\"claude-opus-4-6\",\"stopReason\":\"toolUse\",\"timestamp\":1776295775652}}"
     },
     "kind": "tool.call",
     "payload": {
@@ -225,7 +230,8 @@
           "isError": false,
           "timestamp": 1776295786900
         }
-      }
+      },
+      "rawText": "{\"type\":\"message\",\"id\":\"936682b7\",\"parentId\":\"e8902860\",\"timestamp\":\"2026-04-15T23:29:46.900Z\",\"message\":{\"role\":\"toolResult\",\"toolCallId\":\"call_1\",\"toolName\":\"ask_claude_code\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"output\\\":\\\"Dev server is starting\\\"}\"}],\"isError\":false,\"timestamp\":1776295786900}}"
     },
     "kind": "tool.result",
     "payload": {

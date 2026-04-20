@@ -209,4 +209,23 @@ describe("real local log e2e", () => {
       }
     });
   }
+
+  for (const testCase of realLogCases) {
+    it(`real ${testCase.name} session is byte-identical after a 4-hop pi -> claude -> codex -> pi -> source round-trip`, () => {
+      const path = pathForCase(testCase);
+      expect(path, `${testCase.envVar} must be set`).toBeTruthy();
+      const originalText = readFileSync(path as string, "utf8");
+
+      let canonical = testCase.importer(originalText);
+      for (const target of ["pi", "claude-code", "codex", "pi", testCase.name] as const) {
+        const exported = exporters[target](canonical);
+        const importer = realLogCases.find((other) => other.name === target)?.importer;
+        if (!importer) throw new Error(`missing importer for ${target}`);
+        canonical = importer(exported);
+      }
+
+      const finalText = exporters[testCase.name](canonical);
+      expect(finalText, `${testCase.name} 4-hop roundtrip drift`).toBe(originalText);
+    });
+  }
 });

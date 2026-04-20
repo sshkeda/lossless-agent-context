@@ -10,7 +10,7 @@ import {
   createEvent,
   DEFAULT_BRANCH_ID,
   nativeForLine,
-  parseJsonl,
+  parseJsonlWithText,
   syntheticSessionId,
   toIsoTimestamp,
   toolActor,
@@ -102,7 +102,8 @@ function resolveClaudeLineTimestamp(line: Record<string, unknown>): ResolvedClau
 }
 
 export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
-  const lines = parseJsonl(text);
+  const entries = parseJsonlWithText(text);
+  const lines = entries.map((entry) => entry.line);
   const events: CanonicalEvent[] = [];
 
   const firstNativeLine = lines.find((line) => !isForeignLine(line) && typeof line.sessionId === "string");
@@ -115,13 +116,14 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
 
   function ensureSession(
     line: Record<string, unknown>,
+    lineText: string,
     sessionId: string,
     sessionTimestamp: string,
     syntheticTimestamp: boolean,
   ) {
     if (createdSessions.has(sessionId)) return;
     createdSessions.add(sessionId);
-    const native = withNativeRawRef(nativeForLine(line, "claude-code"), "session");
+    const native = withNativeRawRef(nativeForLine(line, "claude-code", lineText), "session");
     const version = native.source === "claude-code" && typeof line.version === "string" ? line.version : undefined;
     createEvent(events, {
       sessionId,
@@ -140,7 +142,8 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
     });
   }
 
-  for (const line of lines) {
+  for (const entry of entries) {
+    const { line, text: lineText } = entry;
     if (typeof line.sessionId === "string") currentSessionId = line.sessionId;
     const sessionId = currentSessionId;
     const branchId = DEFAULT_BRANCH_ID;
@@ -161,8 +164,8 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
         continue;
       }
 
-      if (line.type !== "last-prompt") ensureSession(line, sessionId, lineTimestamp, syntheticTimestamp);
-      const baseNative = nativeForLine(line, "claude-code");
+      if (line.type !== "last-prompt") ensureSession(line, lineText, sessionId, lineTimestamp, syntheticTimestamp);
+      const baseNative = nativeForLine(line, "claude-code", lineText);
       const native = (rawRef?: string) => withNativeRawRef(baseNative, rawRef);
 
       switch (line.type) {

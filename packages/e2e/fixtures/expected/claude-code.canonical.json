@@ -16,7 +16,8 @@
         "sessionId": "claude-session-1",
         "cwd": "/tmp/lossless-agent-context",
         "version": "2.1.76"
-      }
+      },
+      "rawText": "{\"type\":\"system\",\"subtype\":\"init\",\"timestamp\":\"2026-03-17T00:19:52.225Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"version\":\"2.1.76\"}"
     },
     "extensions": {
       "version": "2.1.76"
@@ -44,7 +45,8 @@
         "sessionId": "claude-session-1",
         "cwd": "/tmp/lossless-agent-context",
         "version": "2.1.76"
-      }
+      },
+      "rawText": "{\"type\":\"system\",\"subtype\":\"init\",\"timestamp\":\"2026-03-17T00:19:52.225Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"version\":\"2.1.76\"}"
     },
     "kind": "provider.event",
     "payload": {
@@ -82,7 +84,8 @@
           "role": "user",
           "content": "what is admin creds?"
         }
-      }
+      },
+      "rawText": "{\"type\":\"user\",\"timestamp\":\"2026-03-17T00:19:54.623Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"user\",\"content\":\"what is admin creds?\"}}"
     },
     "kind": "message.created",
     "payload": {
@@ -136,7 +139,8 @@
             }
           ]
         }
-      }
+      },
+      "rawText": "{\"type\":\"assistant\",\"timestamp\":\"2026-03-17T00:19:58.464Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"I should inspect the env docs first.\",\"signature\":\"sig_123\"},{\"type\":\"text\",\"text\":\"Let me search the codebase for admin credential references.\"},{\"type\":\"tool_use\",\"id\":\"toolu_123\",\"name\":\"Grep\",\"input\":{\"pattern\":\"admin\",\"-i\":true}}]}}"
     },
     "extensions": {
       "signature": "sig_123"
@@ -189,7 +193,8 @@
             }
           ]
         }
-      }
+      },
+      "rawText": "{\"type\":\"assistant\",\"timestamp\":\"2026-03-17T00:19:58.464Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"I should inspect the env docs first.\",\"signature\":\"sig_123\"},{\"type\":\"text\",\"text\":\"Let me search the codebase for admin credential references.\"},{\"type\":\"tool_use\",\"id\":\"toolu_123\",\"name\":\"Grep\",\"input\":{\"pattern\":\"admin\",\"-i\":true}}]}}"
     },
     "kind": "message.created",
     "payload": {
@@ -244,7 +249,8 @@
             }
           ]
         }
-      }
+      },
+      "rawText": "{\"type\":\"assistant\",\"timestamp\":\"2026-03-17T00:19:58.464Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"thinking\",\"thinking\":\"I should inspect the env docs first.\",\"signature\":\"sig_123\"},{\"type\":\"text\",\"text\":\"Let me search the codebase for admin credential references.\"},{\"type\":\"tool_use\",\"id\":\"toolu_123\",\"name\":\"Grep\",\"input\":{\"pattern\":\"admin\",\"-i\":true}}]}}"
     },
     "kind": "tool.call",
     "payload": {
@@ -286,7 +292,8 @@
             }
           ]
         }
-      }
+      },
+      "rawText": "{\"type\":\"user\",\"timestamp\":\"2026-03-17T00:19:58.481Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"user\",\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"toolu_123\",\"content\":\"Found 27 files\",\"is_error\":false}]}}"
     },
     "kind": "tool.result",
     "payload": {
@@ -322,7 +329,8 @@
             }
           ]
         }
-      }
+      },
+      "rawText": "{\"type\":\"assistant\",\"timestamp\":\"2026-03-17T00:20:07.388Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"The admin credentials are set via environment variables.\"}]}}"
     },
     "kind": "message.created",
     "payload": {
