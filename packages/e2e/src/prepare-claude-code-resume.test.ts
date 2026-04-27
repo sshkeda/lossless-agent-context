@@ -1,5 +1,4 @@
 import {
-  exportClaudeCodeJsonl,
   importPiSessionJsonl,
   prepareClaudeCodeResumeSeed,
 } from "@lossless-agent-context/adapters";
@@ -8,6 +7,149 @@ import { describe, expect, it } from "vitest";
 const PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9oN7L9kAAAAASUVORK5CYII=";
 
 describe("prepareClaudeCodeResumeSeed", () => {
+  it("synthesizes Claude assistant message ids for completed Pi tool cycles", () => {
+    // Reverse engineered against Claude Code 2.1.119:
+    // a synthetic assistant tool_use -> user tool_result -> assistant text
+    // sequence is rejected with "tool use concurrency issues" when both
+    // assistant message objects lack Claude's native message.id field.
+    const piJsonl = [
+      { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
+      { type: "message", id: "u1", parentId: null, timestamp: "2026-04-21T00:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "run pwd" }], timestamp: 1 } },
+      {
+        type: "message",
+        id: "a1",
+        parentId: "u1",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "toolu_pwd_1", name: "bash", arguments: { command: "pwd" } }],
+          timestamp: 2,
+        },
+      },
+      {
+        type: "message",
+        id: "r1",
+        parentId: "a1",
+        timestamp: "2026-04-21T00:00:03.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "toolu_pwd_1",
+          toolName: "bash",
+          content: [{ type: "text", text: "/tmp" }],
+          isError: false,
+          timestamp: 3,
+        },
+      },
+      {
+        type: "message",
+        id: "a2",
+        parentId: "r1",
+        timestamp: "2026-04-21T00:00:04.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "text", text: "done" }],
+          timestamp: 4,
+        },
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const firstSeed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const secondSeed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const assistantLines = firstSeed
+      .split("\n")
+      .filter((line) => line.trim())
+      .map((line) => JSON.parse(line))
+      .filter((line) => line.type === "assistant");
+
+    expect(firstSeed).toBe(secondSeed);
+    expect(assistantLines).toHaveLength(2);
+    expect(assistantLines.every((line) => typeof line.message?.id === "string")).toBe(true);
+    expect(assistantLines.every((line) => line.message.id.startsWith("msg_"))).toBe(true);
+    expect(new Set(assistantLines.map((line) => line.message.id)).size).toBe(2);
+    expect(assistantLines[0].message.content.some((block: { type?: string }) => block.type === "tool_use")).toBe(true);
+    expect(assistantLines[1].message.content).toEqual([{ type: "text", text: "done" }]);
+  });
+
+  it("preserves high-count historical tool pairs instead of folding them to text", () => {
+    // The failing AgentVibe seed happened to cross 80 tool results, but the
+    // root cause was missing assistant message ids. Tool count is not the
+    // contract, so the resume seed must not drop or stringify native pairs.
+    const pairCount = 83;
+    const claudeJsonl = [
+      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
+      ...Array.from({ length: pairCount }, (_, index) => {
+        const pair = index + 1;
+        return [
+          {
+            type: "assistant",
+            parentUuid: pair === 1 ? "u0" : `r${pair - 1}`,
+            uuid: `a${pair}`,
+            timestamp: `2026-04-21T00:${String(pair).padStart(2, "0")}:01.000Z`,
+            sessionId: "orig",
+            message: {
+              role: "assistant",
+              content: [
+                { type: "text", text: `running tool ${pair}` },
+                { type: "tool_use", id: `toolu_${pair}`, name: "Bash", input: { command: `echo ${pair}` } },
+              ],
+              stop_reason: "tool_use",
+            },
+          },
+          {
+            type: "user",
+            parentUuid: `a${pair}`,
+            uuid: `r${pair}`,
+            timestamp: `2026-04-21T00:${String(pair).padStart(2, "0")}:02.000Z`,
+            sessionId: "orig",
+            message: {
+              role: "user",
+              content: [
+                {
+                  type: "tool_result",
+                  tool_use_id: `toolu_${pair}`,
+                  content: `result ${pair}`,
+                  is_error: false,
+                },
+              ],
+            },
+          },
+        ];
+      }).flat(),
+      {
+        type: "assistant",
+        parentUuid: `r${pairCount}`,
+        uuid: "final",
+        timestamp: "2026-04-21T01:30:00.000Z",
+        sessionId: "orig",
+        message: { role: "assistant", content: [{ type: "text", text: "done" }], stop_reason: "end_turn" },
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(claudeJsonl, "target-session-id");
+    const seedObjects = seed.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line));
+    const contentBlocks = seedObjects.flatMap((obj) => {
+      const content = obj.message?.content;
+      return Array.isArray(content) ? content : [];
+    });
+    const nativeToolUses = contentBlocks.filter((block) => block?.type === "tool_use");
+    const nativeToolResults = contentBlocks.filter((block) => block?.type === "tool_result");
+    const textBlocks = contentBlocks.filter((block) => block?.type === "text").map((block) => block.text);
+
+    expect(nativeToolUses).toHaveLength(pairCount);
+    expect(nativeToolResults).toHaveLength(pairCount);
+    expect(nativeToolUses.some((block) => block.id === "toolu_1")).toBe(true);
+    expect(nativeToolResults.some((block) => block.tool_use_id === "toolu_1")).toBe(true);
+    expect(nativeToolUses.some((block) => block.id === "toolu_83")).toBe(true);
+    expect(nativeToolResults.some((block) => block.tool_use_id === "toolu_83")).toBe(true);
+    expect(textBlocks.some((text) => text.includes("Historical tool call"))).toBe(false);
+    expect(textBlocks.some((text) => text.includes("Historical tool result"))).toBe(false);
+    expect(seedObjects.every((obj) => obj.sessionId === "target-session-id")).toBe(true);
+  });
+
   it("strips foreign thinking blocks that have no claude signature", () => {
     // Pi session with an openai-codex assistant message carrying a thinking
     // block — its `thinkingSignature` is OpenAI's encrypted reasoning ID,

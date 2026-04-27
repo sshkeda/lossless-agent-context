@@ -1,5 +1,6 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { exportClaudeCodeJsonl } from "./export-claude-code";
+import { deterministicUuid } from "./utils";
 
 // Types claude-code's resume loader accepts on its session file. Anything
 // else in the seed (e.g. "model_change" — valid in pi's format, rejected by
@@ -14,6 +15,25 @@ function stripRejectedToolResultFields(value: unknown): void {
     if (record.type !== "tool_result") continue;
     delete record.structuredContent;
   }
+}
+
+function synthesizeClaudeMessageId(line: Record<string, unknown>, lineIndex: number): string {
+  const seed = JSON.stringify({
+    sessionId: line.sessionId,
+    uuid: line.uuid,
+    timestamp: line.timestamp,
+    parentUuid: line.parentUuid,
+    lineIndex,
+  });
+  return `msg_${deterministicUuid(seed).replace(/-/g, "")}`;
+}
+
+function ensureAssistantMessageId(line: Record<string, unknown>, lineIndex: number): void {
+  const message = line.message;
+  if (!message || typeof message !== "object" || Array.isArray(message)) return;
+  const messageRecord = message as Record<string, unknown>;
+  if (typeof messageRecord.id === "string" && messageRecord.id.length > 0) return;
+  messageRecord.id = synthesizeClaudeMessageId(line, lineIndex);
 }
 
 /**
@@ -51,8 +71,8 @@ export function prepareClaudeCodeResumeSeed(input: string, sessionId: string): s
 export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, sessionId: string): string {
   const jsonl = typeof input === "string" ? input : exportClaudeCodeJsonl(input);
   const lines = jsonl.split("\n").filter((line) => line.trim().length > 0);
-  const kept: string[] = [];
-  for (const line of lines) {
+  const kept: Record<string, unknown>[] = [];
+  for (const [lineIndex, line] of lines.entries()) {
     let obj: Record<string, unknown>;
     try {
       const parsed = JSON.parse(line);
@@ -79,6 +99,7 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
           if (filtered.length === 0) continue;
           messageRecord.content = filtered;
         }
+        ensureAssistantMessageId(obj, lineIndex);
       }
     }
 
@@ -90,7 +111,7 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
     }
 
     obj.sessionId = sessionId;
-    kept.push(JSON.stringify(obj));
+    kept.push(obj);
   }
-  return kept.length > 0 ? `${kept.join("\n")}\n` : "";
+  return kept.length > 0 ? `${kept.map((obj) => JSON.stringify(obj)).join("\n")}\n` : "";
 }
