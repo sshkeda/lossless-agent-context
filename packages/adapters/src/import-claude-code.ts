@@ -321,6 +321,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 }
                 const toolCallId = record.tool_use_id;
                 const toolName = toolNameByCallId.get(toolCallId);
+                const details = toolResultDetailsFromClaudeRecord(record, line, toolName);
                 createEvent(events, {
                   sessionId,
                   branchId,
@@ -331,7 +332,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                     toolCallId,
                     output: record.content,
                     isError: Boolean(record.is_error),
-                    details: toolResultDetailsFromClaudeRecord(record, line, toolName),
+                    ...(details !== undefined ? { details } : {}),
                   },
                   extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                   native: native(`user.content[${partIndex}].tool_result`),

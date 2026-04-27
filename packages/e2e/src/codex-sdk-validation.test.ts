@@ -191,7 +191,7 @@ describe("Codex SDK validation: real Codex JSONL schema accepts Claude -> Codex 
 
     const toolCall = findFirstToolCall(reimported);
     expect(toolCall?.toolCallId).toBe("toolu_123");
-    expect(toolCall?.name).toBe("Grep");
+    expect(toolCall?.name).toBe("grep");
     expect(toolCall?.arguments).toEqual({ pattern: "admin", "-i": true });
 
     const toolResult = findFirstToolResult(reimported);

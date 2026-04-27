@@ -67,7 +67,6 @@ describe("Pi real native shape corpus", () => {
     );
     const eventTypes = new Set(providerEvents.map((event) => event.payload.eventType));
     expect(eventTypes.has("thinking_level_change")).toBe(true);
-    expect(eventTypes.has("custom_message")).toBe(true);
     expect(eventTypes.has("compaction")).toBe(true);
 
     const textSignatures = events
@@ -78,6 +77,7 @@ describe("Pi real native shape corpus", () => {
       .filter((part) => part.type === "text")
       .map((part) => part.text);
     expect(textSignatures.some((text) => text.includes("Signed text only."))).toBe(true);
+    expect(textSignatures.some((text) => text.includes("Council results"))).toBe(true);
 
     const imageToolResult = events.find(
       (event): event is Extract<CanonicalEvent, { kind: "tool.result" }> =>
