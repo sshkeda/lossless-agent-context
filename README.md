@@ -4,6 +4,20 @@ Lossless session switching between Claude Code, Codex, and Pi.
 
 Each of those tools stores its session context in its own native JSONL shape. This repo converts between them without dropping information, so you can hot-swap a session from one tool to another and keep working.
 
+## Product standard
+
+The product standard is strict native fidelity:
+
+- `provider -> LAC -> other format -> LAC -> provider` must round-trip back to the original native session bytes.
+- This applies uniformly to Claude Code, Codex, and Pi.
+- If a rebuilt provider session is not byte-for-byte identical to the original native session, that is a bug in LAC.
+- Provider-specific workarounds that rely on replaying preserved raw files instead of reconstructing them are not the intended end state; reconstruction itself must be lossless.
+
+Current gap:
+
+- **Claude resume seeds are not yet natively lossless.** Real experiments showed Claude Code can reject synthetic resume seeds with `API Error: 400 due to tool use concurrency issues.` once enough historical `tool_result` pairs are preserved.
+- The required fix is exact native fidelity in reconstruction: `Claude -> LAC -> pi -> LAC -> Claude` must produce the same native Claude bytes, including historical tool execution state.
+
 ## Usage
 
 ```bash

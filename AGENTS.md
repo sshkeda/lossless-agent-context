@@ -6,5 +6,10 @@
 - Do not avoid machine-local verification merely because it depends on local CLIs, auth, or real session logs; this repo explicitly assumes those prerequisites exist.
 - If a full machine-local verification command fails, report the exact failing command and error rather than downgrading the verification claim.
 - Product intent is strict losslessness. Preserve all source information across imports/exports and keep emitted logs as close to native as possible without dropping data.
+- The strongest fidelity requirement is byte-identical native round-trips (`provider -> LAC -> other -> LAC -> provider`) wherever the target provider format can represent the source exactly.
+- Treat "provider resumes its own round-tripped session natively" as a first-class acceptance criterion, not just semantic equivalence.
+- Do not reframe same-provider failures as needing native-file replay special cases; if reconstruction is not byte-identical, the reconstruction is wrong.
+- Do not accept "works in practice" or "close enough" as success. The rebuilt native session must be the original native session.
+- If a workaround makes a failing resume path "work" by dropping native session semantics, treat it as diagnostic only, not a valid final fix.
+- Current known gap: Claude resume seeds built from synthetic cross-provider history are still not natively lossless. The real fix is exact native Claude raw replay fidelity, not semantic reconstruction.
 - Do not add lossy export modes, native-only fallbacks that discard information, or tests that normalize away missing fidelity.
-- Do not update this `AGENTS.md` unless the user explicitly asks to update it.
