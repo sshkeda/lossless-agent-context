@@ -10,6 +10,7 @@ import {
 } from "./cross-provider";
 import { PI_SESSION_VERSION } from "./defaults";
 import { deterministicPiId, isoTimestampToEpochMs, stringifyToolOutput } from "./utils";
+import { normalizePiMcpToolName } from "./tool-projections";
 
 type PiBlock = Record<string, unknown>;
 type StoredClaudeLineIds = Record<string, unknown> | undefined;
@@ -21,7 +22,7 @@ export function exportPiSessionJsonl(events: CanonicalEvent[]): string {
   const toolNameByCallId = new Map(
     events
       .filter((event): event is Extract<CanonicalEvent, { kind: "tool.call" }> => event.kind === "tool.call")
-      .map((event) => [event.payload.toolCallId, event.payload.name] as const),
+      .map((event) => [event.payload.toolCallId, normalizePiMcpToolName(event.payload.name)] as const),
   );
   let parentId: string | null = null;
   let emittedSession = false;
@@ -98,17 +99,21 @@ export function exportPiSessionJsonl(events: CanonicalEvent[]): string {
     }
 
     if (first.kind === "tool.result") {
-      const output = first.payload.output;
+      const toolResult = first as Extract<CanonicalEvent, { kind: "tool.result" }>;
+      const output = toolResult.payload.output;
       const text = stringifyToolOutput(output);
-      const toolName = first.actor?.toolName ?? toolNameByCallId.get(first.payload.toolCallId);
+      const toolName = toolResult.actor?.toolName
+        ? normalizePiMcpToolName(toolResult.actor.toolName)
+        : toolNameByCallId.get(toolResult.payload.toolCallId);
       const message: Record<string, unknown> = {
         role: "toolResult",
-        toolCallId: first.payload.toolCallId,
+        toolCallId: toolResult.payload.toolCallId,
         content: [{ type: "text", text }],
-        isError: first.payload.isError,
+        isError: toolResult.payload.isError,
         timestamp: ms,
       };
       if (toolName !== undefined) message.toolName = toolName;
+      if (toolResult.payload.details !== undefined) message.details = toolResult.payload.details;
       return attachTargetIds(
         emit({
           type: "message",
@@ -136,7 +141,7 @@ export function exportPiSessionJsonl(events: CanonicalEvent[]): string {
         assistantBlocks.push({
           type: "toolCall",
           id: event.payload.toolCallId,
-          name: event.payload.name,
+          name: normalizePiMcpToolName(event.payload.name),
           arguments: event.payload.arguments ?? {},
         });
         continue;

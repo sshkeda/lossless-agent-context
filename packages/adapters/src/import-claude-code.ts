@@ -17,8 +17,10 @@ import {
   withNativeRawRef,
   withSyntheticTimestampExtension,
 } from "./utils";
+import { projectClaudeToolCallToPi } from "./tool-projections";
 
 type Extensions = Record<string, unknown> | undefined;
+const TOOL_RESULT_DETAILS_KEY = "lossless-agent-context/toolResultDetails";
 type ResolvedClaudeLineTimestamp = {
   synthetic: boolean;
   value: string;
@@ -99,6 +101,99 @@ function resolveClaudeLineTimestamp(line: Record<string, unknown>): ResolvedClau
   }
 
   throw new Error("Invalid Claude line timestamp");
+}
+
+function structuredToolResultDetailsFromClaudeRecord(record: Record<string, unknown>): unknown {
+  const structuredContent = record.structuredContent;
+  if (!structuredContent || typeof structuredContent !== "object" || Array.isArray(structuredContent)) return undefined;
+  return (structuredContent as Record<string, unknown>)[TOOL_RESULT_DETAILS_KEY];
+}
+
+type ClaudeStructuredPatchHunk = {
+  oldStart?: number;
+  oldLines?: number;
+  newStart?: number;
+  newLines?: number;
+  lines?: unknown;
+};
+
+function normalizedEditToolResultDetailsFromClaudeLine(line: Record<string, unknown>): Record<string, unknown> | undefined {
+  const toolUseResult = line.toolUseResult;
+  if (!toolUseResult || typeof toolUseResult !== "object" || Array.isArray(toolUseResult)) return undefined;
+  const record = toolUseResult as Record<string, unknown>;
+  const structuredPatch = Array.isArray(record.structuredPatch)
+    ? (record.structuredPatch as ClaudeStructuredPatchHunk[])
+    : undefined;
+  if (!structuredPatch || structuredPatch.length === 0) return undefined;
+
+  const hunks = structuredPatch.filter(
+    (hunk) =>
+      hunk &&
+      typeof hunk === "object" &&
+      typeof hunk.oldStart === "number" &&
+      typeof hunk.newStart === "number" &&
+      Array.isArray(hunk.lines),
+  );
+  if (hunks.length === 0) return undefined;
+
+  const maxLine = hunks.reduce((max, hunk) => {
+    const oldEnd = typeof hunk.oldStart === "number" && typeof hunk.oldLines === "number"
+      ? hunk.oldStart + hunk.oldLines - 1
+      : 0;
+    const newEnd = typeof hunk.newStart === "number" && typeof hunk.newLines === "number"
+      ? hunk.newStart + hunk.newLines - 1
+      : 0;
+    return Math.max(max, oldEnd, newEnd);
+  }, 0);
+  const lineNumWidth = String(Math.max(maxLine, 1)).length;
+  const blankLineNum = "".padStart(lineNumWidth, " ");
+  const output: string[] = [];
+
+  for (let i = 0; i < hunks.length; i++) {
+    const hunk = hunks[i];
+    if (i > 0) output.push(` ${blankLineNum} ...`);
+    let oldLine = hunk.oldStart ?? 1;
+    let newLine = hunk.newStart ?? 1;
+
+    for (const rawLine of hunk.lines as unknown[]) {
+      if (typeof rawLine !== "string") continue;
+      if (rawLine.startsWith("+")) {
+        output.push(`+${String(newLine).padStart(lineNumWidth, " ")} ${rawLine.slice(1)}`);
+        newLine++;
+        continue;
+      }
+      if (rawLine.startsWith("-")) {
+        output.push(`-${String(oldLine).padStart(lineNumWidth, " ")} ${rawLine.slice(1)}`);
+        oldLine++;
+        continue;
+      }
+      const text = rawLine.startsWith(" ") ? rawLine.slice(1) : rawLine;
+      output.push(` ${String(oldLine).padStart(lineNumWidth, " ")} ${text}`);
+      oldLine++;
+      newLine++;
+    }
+  }
+
+  return {
+    diff: output.join("\n"),
+    firstChangedLine: hunks[0]?.newStart,
+    claudeToolUseResult: record,
+  };
+}
+
+function toolResultDetailsFromClaudeRecord(
+  record: Record<string, unknown>,
+  line: Record<string, unknown>,
+  toolName: string | undefined,
+): unknown {
+  const structured = structuredToolResultDetailsFromClaudeRecord(record);
+  const editDetails = toolName === "edit" ? normalizedEditToolResultDetailsFromClaudeLine(line) : undefined;
+  if (structured === undefined) return editDetails;
+  if (!editDetails) return structured;
+  if (typeof structured === "object" && structured !== null && !Array.isArray(structured)) {
+    return { ...(structured as Record<string, unknown>), ...editDetails };
+  }
+  return { structuredToolResultDetails: structured, ...editDetails };
 }
 
 export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
@@ -225,16 +320,18 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                   continue;
                 }
                 const toolCallId = record.tool_use_id;
+                const toolName = toolNameByCallId.get(toolCallId);
                 createEvent(events, {
                   sessionId,
                   branchId,
                   timestamp: lineTimestamp,
                   kind: "tool.result",
-                  actor: toolActor(toolNameByCallId.get(toolCallId)),
+                  actor: toolActor(toolName),
                   payload: {
                     toolCallId,
                     output: record.content,
                     isError: Boolean(record.is_error),
+                    details: toolResultDetailsFromClaudeRecord(record, line, toolName),
                   },
                   extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                   native: native(`user.content[${partIndex}].tool_result`),
@@ -362,8 +459,8 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 continue;
               }
               const toolCallId = record.id;
-              const toolName = record.name;
-              toolNameByCallId.set(toolCallId, toolName);
+              const projected = projectClaudeToolCallToPi(record.name, record.input);
+              toolNameByCallId.set(toolCallId, projected.name);
               createEvent(events, {
                 sessionId,
                 branchId,
@@ -371,12 +468,12 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                 kind: "tool.call",
                 actor: {
                   type: "assistant",
-                  toolName,
+                  toolName: projected.name,
                 },
                 payload: {
                   toolCallId,
-                  name: toolName,
-                  arguments: record.input,
+                  name: projected.name,
+                  arguments: projected.arguments,
                 },
                 cache,
                 extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),

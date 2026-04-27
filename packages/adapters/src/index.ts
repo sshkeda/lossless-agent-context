@@ -5,3 +5,5 @@ export { exportPiSessionJsonl } from "./export-pi";
 export { importClaudeCodeJsonl } from "./import-claude-code";
 export { importCodexJsonl } from "./import-codex";
 export { importPiSessionJsonl } from "./import-pi";
+export { prepareClaudeCodeResumeSeed } from "./prepare-claude-code-resume";
+export { normalizePiMcpToolName, projectClaudeToolCallToPi, projectToolCallToClaude } from "./tool-projections";

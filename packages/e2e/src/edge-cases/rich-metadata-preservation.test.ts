@@ -10,6 +10,7 @@ import { CANONICAL_SCHEMA_VERSION, type CanonicalEvent, canonicalEventSchema } f
 import { describe, expect, it } from "vitest";
 
 const TS = "2026-04-15T12:00:00.000Z";
+const TOOL_RESULT_DETAILS_KEY = "lossless-agent-context/toolResultDetails";
 
 function event(input: Omit<CanonicalEvent, "schemaVersion" | "eventId" | "seq"> & { seq: number }): CanonicalEvent {
   return canonicalEventSchema.parse({
@@ -162,6 +163,86 @@ describe("edge case: tool.result.error cross-provider preservation", () => {
     const final = importPiSessionJsonl(piText);
     const tr = final.find((event) => event.kind === "tool.result");
     expect(tr?.actor?.toolName).toBe("exec");
+  });
+
+  it("tool.result.details survive pi → claude → pi", () => {
+    const input = `${JSON.stringify({
+      type: "session",
+      version: 3,
+      id: "pi-tool-details-1",
+      timestamp: TS,
+      cwd: "/tmp",
+    })}\n${JSON.stringify({
+      type: "message",
+      id: "msg-tool-result-details",
+      parentId: null,
+      timestamp: "2026-04-15T12:00:02.000Z",
+      message: {
+        role: "toolResult",
+        toolCallId: "call-details",
+        toolName: "fetch",
+        content: [{ type: "text", text: "ok" }],
+        isError: false,
+        details: {
+          method: "json",
+          contentType: "application/json",
+          finalUrl: "https://example.com/data.json",
+        },
+        timestamp: 1776254402000,
+      },
+    })}\n`;
+
+    const c1 = importPiSessionJsonl(input);
+    const claudeText = exportClaudeCodeJsonl(c1);
+    const c2 = importClaudeCodeJsonl(claudeText);
+    const piText = exportPiSessionJsonl(c2);
+    const final = importPiSessionJsonl(piText);
+    const tr = final.find((event) => event.kind === "tool.result");
+    if (tr?.kind !== "tool.result") throw new Error("type narrowing");
+    expect(tr.payload.details).toEqual({
+      method: "json",
+      contentType: "application/json",
+      finalUrl: "https://example.com/data.json",
+    });
+  });
+
+  it("imports Claude tool_result structuredContent as tool.result.details", () => {
+    const input = `${JSON.stringify({
+      type: "system",
+      subtype: "init",
+      timestamp: TS,
+      sessionId: "claude-tool-details-1",
+      cwd: "/tmp",
+      version: "2.1.76",
+    })}\n${JSON.stringify({
+      type: "user",
+      timestamp: "2026-04-15T12:00:02.000Z",
+      sessionId: "claude-tool-details-1",
+      cwd: "/tmp",
+      message: {
+        role: "user",
+        content: [{
+          type: "tool_result",
+          tool_use_id: "tu_details",
+          content: "ok",
+          structuredContent: {
+            [TOOL_RESULT_DETAILS_KEY]: {
+              method: "jina",
+              contentType: "text/html",
+            },
+          },
+          is_error: false,
+        }],
+      },
+    })}\n`;
+
+    const events = importClaudeCodeJsonl(input);
+    const tr = events.find((event) => event.kind === "tool.result");
+    if (tr?.kind !== "tool.result") throw new Error("type narrowing");
+    expect(tr.payload.details).toEqual({
+      method: "jina",
+      contentType: "text/html",
+    });
   });
 });
 

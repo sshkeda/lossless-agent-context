@@ -80,7 +80,7 @@ for (const { name } of LOSSLESS_CASES) {
       expect(toolCall).toBeDefined();
       if (toolCall && toolCall.type === "toolCall") {
         expect(toolCall.id).toBe("toolu_123");
-        expect(toolCall.name).toBe("Grep");
+        expect(toolCall.name).toBe("grep");
         expect(toolCall.arguments).toEqual({ pattern: "admin", "-i": true });
       }
     });
@@ -98,7 +98,7 @@ for (const { name } of LOSSLESS_CASES) {
       expect(toolResult).toBeDefined();
       if (toolResult && toolResult.message.role === "toolResult") {
         expect(toolResult.message.toolCallId).toBe("toolu_123");
-        expect(toolResult.message.toolName).toBe("Grep");
+        expect(toolResult.message.toolName).toBe("grep");
         const blocks = Array.isArray(toolResult.message.content) ? toolResult.message.content : [];
         const text = blocks
           .filter((b): b is { type: "text"; text: string } => b.type === "text")

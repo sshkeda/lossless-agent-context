@@ -133,6 +133,29 @@ export function parseStrictJson(value: string, label = "JSON"): unknown {
 
 export function stringifyToolOutput(output: unknown): string {
   if (typeof output === "string") return output;
+  if (Array.isArray(output)) {
+    const parts: string[] = [];
+    for (const item of output) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) return JSON.stringify(output ?? null);
+      const record = item as Record<string, unknown>;
+      if (record.type === "text" && typeof record.text === "string") {
+        parts.push(record.text);
+        continue;
+      }
+      if (record.type === "image") {
+        const mimeType =
+          typeof record.mimeType === "string"
+            ? record.mimeType
+            : typeof record.mediaType === "string"
+              ? record.mediaType
+              : undefined;
+        parts.push(`[image tool result${mimeType ? `: ${mimeType}` : ""}]`);
+        continue;
+      }
+      return JSON.stringify(output ?? null);
+    }
+    return parts.join("\n").trim();
+  }
   return JSON.stringify(output ?? null);
 }
 

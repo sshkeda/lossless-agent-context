@@ -56,7 +56,7 @@ describe("Claude real native shape corpus", () => {
       (event): event is Extract<CanonicalEvent, { kind: "tool.call" }> => event.kind === "tool.call",
     );
     expect(toolCall?.payload.toolCallId).toBe("toolu_012d8sadSfd4DrVRpAZH9hVi");
-    expect(toolCall?.payload.name).toBe("Grep");
+    expect(toolCall?.payload.name).toBe("grep");
 
     const toolResult = events.find(
       (event): event is Extract<CanonicalEvent, { kind: "tool.result" }> => event.kind === "tool.result",
@@ -100,7 +100,7 @@ describe("Claude real native shape corpus", () => {
       (event): event is Extract<CanonicalEvent, { kind: "tool.call" }> =>
         event.kind === "tool.call" && event.payload.toolCallId === "toolu_call-blue",
     );
-    expect(blueToolCall?.payload.name).toBe("Bash");
+    expect(blueToolCall?.payload.name).toBe("bash");
 
     const blueToolResult = events.find(
       (event): event is Extract<CanonicalEvent, { kind: "tool.result" }> =>

@@ -15,6 +15,7 @@ import {
   toIsoTimestamp,
   withNativeRawRef,
 } from "./utils";
+import { normalizePiMcpToolName } from "./tool-projections";
 
 type Extensions = Record<string, unknown> | undefined;
 
@@ -198,6 +199,23 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
           });
           break;
         }
+        case "custom_message": {
+          const content = line.content;
+          const parts = piContentParts(content);
+          if (parts.length > 0) {
+            createEvent(events, {
+              sessionId,
+              branchId,
+              timestamp: piTimestamp(line.timestamp),
+              kind: "message.created",
+              actor: { type: "user" },
+              payload: { role: "user", parts },
+              extensions,
+              native: native("custom_message"),
+            });
+          }
+          break;
+        }
         case "message": {
           const message = line.message as Record<string, unknown> | undefined;
           if (!message || typeof message.role !== "string") break;
@@ -278,6 +296,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
                   });
                   continue;
                 }
+                const toolName = normalizePiMcpToolName(record.name);
                 createEvent(events, {
                   sessionId,
                   branchId,
@@ -285,11 +304,11 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
                   kind: "tool.call",
                   actor: {
                     type: "assistant",
-                    toolName: record.name,
+                    toolName,
                   },
                   payload: {
                     toolCallId: record.id,
-                    name: record.name,
+                    name: toolName,
                     arguments: record.arguments,
                   },
                   cache,
@@ -325,12 +344,13 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
               kind: "tool.result",
               actor: {
                 type: "tool",
-                toolName: typeof message.toolName === "string" ? message.toolName : undefined,
+                toolName: typeof message.toolName === "string" ? normalizePiMcpToolName(message.toolName) : undefined,
               },
               payload: {
                 toolCallId: message.toolCallId,
                 output: piContentParts(message.content),
                 isError: Boolean(message.isError),
+                details: "details" in message ? message.details : undefined,
               },
               extensions,
               native: native("message.toolResult"),

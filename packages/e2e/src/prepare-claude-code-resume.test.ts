@@ -1,0 +1,313 @@
+import {
+  exportClaudeCodeJsonl,
+  importPiSessionJsonl,
+  prepareClaudeCodeResumeSeed,
+} from "@lossless-agent-context/adapters";
+import { describe, expect, it } from "vitest";
+
+const PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9oN7L9kAAAAASUVORK5CYII=";
+
+describe("prepareClaudeCodeResumeSeed", () => {
+  it("strips foreign thinking blocks that have no claude signature", () => {
+    // Pi session with an openai-codex assistant message carrying a thinking
+    // block — its `thinkingSignature` is OpenAI's encrypted reasoning ID,
+    // NOT a claude signature. Exporting to claude-code yields `{type:"thinking"}`
+    // with no signature, which claude's API rejects:
+    //   messages.N.content.M.thinking.signature: Field required
+    const piJsonl = [
+      { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
+      { type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-21T00:00:00.100Z", provider: "openai-codex", modelId: "gpt-5.4" },
+      { type: "message", id: "u1", parentId: null, timestamp: "2026-04-21T00:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "hey" }], timestamp: 1 } },
+      { type: "message", id: "a1", parentId: "u1", timestamp: "2026-04-21T00:00:02.000Z", message: { role: "assistant", content: [{ type: "thinking", thinking: "codex reasoning", thinkingSignature: '{"id":"rs_x","encrypted_content":"OPENAI_FORMAT"}' }, { type: "text", text: "Hey!", textSignature: '{"id":"msg_y"}' }], api: "openai-codex-responses", provider: "openai-codex", model: "gpt-5.4", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: 2 } },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const canonical = importPiSessionJsonl(piJsonl);
+    const seed = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
+
+    const seedLines = seed.split("\n").filter((l) => l.trim().length > 0);
+    const invalid: Array<{ line: number; block: number }> = [];
+    let userTextPreserved = false;
+    for (const [i, line] of seedLines.entries()) {
+      const obj = JSON.parse(line);
+      // sessionId must be rewritten
+      expect(obj.sessionId).toBe("target-session-id");
+      // only claude-accepted types should survive
+      expect(new Set(["system", "user", "assistant", "summary", "attachment"]).has(obj.type)).toBe(true);
+
+      if (obj.type === "user") {
+        const content = obj.message?.content;
+        // claude-code accepts both string and array content for user messages.
+        if (typeof content === "string" && content === "hey") userTextPreserved = true;
+        if (Array.isArray(content) && content.some((p) => p?.type === "text" && p.text === "hey")) {
+          userTextPreserved = true;
+        }
+      }
+
+      if (obj.type === "assistant") {
+        const content = obj.message?.content ?? [];
+        for (const [j, block] of content.entries()) {
+          if (block?.type === "thinking") {
+            const hasSig = typeof block.signature === "string" && block.signature.length > 0;
+            if (!hasSig) invalid.push({ line: i, block: j });
+          }
+        }
+      }
+    }
+    expect(invalid).toEqual([]);
+    expect(userTextPreserved).toBe(true);
+  });
+
+  it("drops assistant lines whose content becomes empty after stripping", () => {
+    // Pi session whose assistant message contains ONLY a foreign thinking
+    // block. After stripping, the content array is empty — the whole line
+    // should be dropped (empty-content assistant messages are invalid).
+    const piJsonl = [
+      { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
+      { type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-21T00:00:00.100Z", provider: "openai-codex", modelId: "gpt-5.4" },
+      { type: "message", id: "u1", parentId: null, timestamp: "2026-04-21T00:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 } },
+      { type: "message", id: "a1", parentId: "u1", timestamp: "2026-04-21T00:00:02.000Z", message: { role: "assistant", content: [{ type: "thinking", thinking: "only thinking", thinkingSignature: '{"id":"rs_z"}' }], api: "openai-codex-responses", provider: "openai-codex", model: "gpt-5.4", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: 2 } },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const canonical = importPiSessionJsonl(piJsonl);
+    const seed = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
+
+    const seedObjs = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    const assistantLines = seedObjs.filter((o) => o.type === "assistant");
+    expect(assistantLines).toHaveLength(0);
+  });
+
+  it("preserves claude's own signed thinking on a pure claude round-trip", () => {
+    // Pure claude round-trip: thinking has a valid signature (claude->canonical->claude).
+    // The helper must keep the block untouched — the `native.raw` passthrough in
+    // exportClaudeCodeJsonl already preserves the signature in this case.
+    const claudeJsonl = [
+      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
+      { type: "assistant", parentUuid: "u0", uuid: "u1", timestamp: "2026-04-21T00:00:01.000Z", sessionId: "orig", message: { role: "assistant", content: [{ type: "thinking", thinking: "real claude reasoning", signature: "sig-valid-claude" }, { type: "text", text: "answer" }] } },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    // Round-trip through the jsonl overload (claude-code jsonl in, seed jsonl out).
+    const seed = prepareClaudeCodeResumeSeed(claudeJsonl, "target-session-id");
+
+    const assistantLine = seed
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l))
+      .find((o) => o.type === "assistant");
+    expect(assistantLine).toBeDefined();
+    const thinkingBlock = assistantLine.message.content.find((b: { type: string }) => b.type === "thinking");
+    expect(thinkingBlock?.signature).toBe("sig-valid-claude");
+    expect(assistantLine.sessionId).toBe("target-session-id");
+  });
+
+  it("jsonl overload: strips thinking blocks from pre-exported claude-code jsonl", () => {
+    // Direct input of malformed claude-code jsonl (thinking without signature)
+    // — the helper must still strip, without needing to go through canonical.
+    const malformedClaudeJsonl = [
+      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
+      { type: "assistant", parentUuid: "u0", uuid: "u1", timestamp: "2026-04-21T00:00:01.000Z", sessionId: "orig", message: { role: "assistant", content: [{ type: "thinking", thinking: "no sig" }, { type: "text", text: "hi" }] } },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "new-sess");
+
+    const assistantLine = seed
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l))
+      .find((o) => o.type === "assistant");
+    expect(assistantLine?.message.content.some((b: { type: string }) => b.type === "thinking")).toBe(false);
+    expect(assistantLine?.message.content.some((b: { type: string; text?: string }) => b.type === "text" && b.text === "hi")).toBe(true);
+  });
+
+  it("does not export Pi tool result details as Claude tool_result structuredContent", () => {
+    const piJsonl = [
+      { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
+      {
+        type: "message",
+        id: "a1",
+        parentId: null,
+        timestamp: "2026-04-21T00:00:01.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "toolu_details_1", name: "bash", arguments: { command: "pwd" } }],
+          timestamp: 1,
+        },
+      },
+      {
+        type: "message",
+        id: "r1",
+        parentId: "a1",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "toolu_details_1",
+          toolName: "bash",
+          content: [{ type: "text", text: "/tmp" }],
+          details: { "pi-claude-code/nativeSessionId": "native-session-from-pi" },
+          isError: false,
+          timestamp: 2,
+        },
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    const toolResultLine = seedObjects.find(
+      (line) =>
+        line.type === "user" &&
+        Array.isArray(line.message?.content) &&
+        line.message.content.some((part: { type?: string }) => part?.type === "tool_result"),
+    );
+    const toolResultBlock = toolResultLine?.message.content.find((part: { type?: string }) => part?.type === "tool_result");
+
+    expect(toolResultBlock).toBeDefined();
+    expect(toolResultBlock.structuredContent).toBeUndefined();
+    expect(JSON.stringify(toolResultBlock)).not.toContain("pi-claude-code/nativeSessionId");
+  });
+
+  it("jsonl overload: strips legacy tool_result structuredContent before Claude resume", () => {
+    const malformedClaudeJsonl = [
+      {
+        type: "assistant",
+        parentUuid: "u0",
+        uuid: "u1",
+        timestamp: "2026-04-21T00:00:01.000Z",
+        sessionId: "orig",
+        message: {
+          role: "assistant",
+          content: [{ type: "tool_use", id: "toolu_legacy_1", name: "Bash", input: { command: "pwd" } }],
+        },
+      },
+      {
+        type: "user",
+        parentUuid: "u1",
+        uuid: "u2",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        sessionId: "orig",
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_legacy_1",
+              content: [{ type: "text", text: "/tmp" }],
+              is_error: false,
+              structuredContent: {
+                "lossless-agent-context/toolResultDetails": {
+                  "pi-claude-code/nativeSessionId": "native-session-from-pi",
+                },
+              },
+            },
+          ],
+        },
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "target-session-id");
+    const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    const toolResultLine = seedObjects.find(
+      (line) =>
+        line.type === "user" &&
+        Array.isArray(line.message?.content) &&
+        line.message.content.some((part: { type?: string }) => part?.type === "tool_result"),
+    );
+    const toolResultBlock = toolResultLine?.message.content.find((part: { type?: string }) => part?.type === "tool_result");
+
+    expect(toolResultBlock).toBeDefined();
+    expect(toolResultBlock.structuredContent).toBeUndefined();
+  });
+
+  it("rewrites Pi image tool results into Claude image source blocks", () => {
+    const piJsonl = [
+      { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
+      {
+        type: "message",
+        id: "a1",
+        parentId: null,
+        timestamp: "2026-04-21T00:00:01.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: "tool_read_1", name: "read", arguments: { path: "/tmp/example.png" } }],
+          timestamp: 1,
+        },
+      },
+      {
+        type: "message",
+        id: "r1",
+        parentId: "a1",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: "tool_read_1",
+          toolName: "read",
+          content: [
+            { type: "text", text: "Read image file [image/png]" },
+            { type: "image", mimeType: "image/png", data: PNG_BASE64 },
+          ],
+          isError: false,
+          timestamp: 2,
+        },
+      },
+      {
+        type: "message",
+        id: "u1",
+        parentId: "r1",
+        timestamp: "2026-04-21T00:00:03.000Z",
+        message: { role: "user", content: [{ type: "text", text: "undo it" }], timestamp: 3 },
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const canonical = importPiSessionJsonl(piJsonl);
+    const seed = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
+    const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    const toolResultLine = seedObjects.find(
+      (line) =>
+        line.type === "user" &&
+        Array.isArray(line.message?.content) &&
+        line.message.content.some((part: { type?: string }) => part?.type === "tool_result"),
+    );
+
+    expect(toolResultLine).toBeDefined();
+    const toolResultBlock = toolResultLine.message.content.find((part: { type?: string }) => part?.type === "tool_result");
+    expect(toolResultBlock?.content).toEqual([
+      { type: "text", text: "Read image file [image/png]" },
+      {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: "image/png",
+          data: PNG_BASE64,
+        },
+      },
+    ]);
+  });
+
+  it("rewrites sessionId on every kept line", () => {
+    const claudeJsonl = [
+      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "old-id", cwd: "/tmp" },
+      { type: "user", parentUuid: "u0", uuid: "u1", timestamp: "2026-04-21T00:00:01.000Z", sessionId: "old-id", message: { role: "user", content: [{ type: "text", text: "hi" }] } },
+      { type: "assistant", parentUuid: "u1", uuid: "u2", timestamp: "2026-04-21T00:00:02.000Z", sessionId: "old-id", message: { role: "assistant", content: [{ type: "text", text: "hey" }] } },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(claudeJsonl, "brand-new-id");
+    for (const line of seed.split("\n").filter((l) => l.trim())) {
+      expect(JSON.parse(line).sessionId).toBe("brand-new-id");
+    }
+  });
+
+});

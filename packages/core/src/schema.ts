@@ -187,6 +187,7 @@ export const toolResultEventSchema = baseEnvelopeSchema.extend({
     output: z.unknown().optional(),
     isError: z.boolean().default(false),
     error: z.string().optional(),
+    details: z.unknown().optional(),
   }),
 });
 

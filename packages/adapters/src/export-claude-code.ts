@@ -157,12 +157,14 @@ export function exportClaudeCodeJsonl(events: CanonicalEvent[]): string {
         continue;
       }
       if (event.kind === "tool.result") {
-        userBlocks.push({
+        const toolResult = event as Extract<CanonicalEvent, { kind: "tool.result" }>;
+        const block: ClaudeBlock = {
           type: "tool_result",
-          tool_use_id: event.payload.toolCallId,
-          content: toolResultContentForClaude(event.payload.output),
-          is_error: event.payload.isError,
-        });
+          tool_use_id: toolResult.payload.toolCallId,
+          content: toolResultContentForClaude(toolResult.payload.output),
+          is_error: toolResult.payload.isError,
+        };
+        userBlocks.push(block);
       }
     }
 
@@ -228,8 +230,65 @@ function partToClaudeBlock(part: ContentPart): ClaudeBlock {
   }
 }
 
+function toolResultPartToClaudeBlock(part: unknown): unknown {
+  if (!part || typeof part !== "object" || Array.isArray(part)) return part;
+  const record = part as Record<string, unknown>;
+
+  if (record.type === "text" && typeof record.text === "string") {
+    return { type: "text", text: record.text };
+  }
+
+  if (record.type === "image") {
+    if (record.source && typeof record.source === "object" && !Array.isArray(record.source)) {
+      return record;
+    }
+
+    if (typeof record.imageRef === "string") {
+      return partToClaudeBlock({
+        type: "image",
+        imageRef: record.imageRef,
+        mediaType: typeof record.mediaType === "string"
+          ? record.mediaType
+          : typeof record.mimeType === "string"
+            ? record.mimeType
+            : undefined,
+      });
+    }
+
+    if (typeof record.data === "string") {
+      return {
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: typeof record.mimeType === "string"
+            ? record.mimeType
+            : typeof record.mediaType === "string"
+              ? record.mediaType
+              : "image/png",
+          data: record.data,
+        },
+      };
+    }
+  }
+
+  if (record.type === "file" && typeof record.fileId === "string") {
+    return partToClaudeBlock({
+      type: "file",
+      fileId: record.fileId,
+      filename: typeof record.filename === "string" ? record.filename : undefined,
+      mediaType: typeof record.mediaType === "string" ? record.mediaType : undefined,
+    });
+  }
+
+  if (record.type === "json" && "value" in record) {
+    return partToClaudeBlock({ type: "json", value: record.value });
+  }
+
+  return part;
+}
+
 function toolResultContentForClaude(output: unknown): string | unknown[] {
   if (typeof output === "string") return output;
-  if (Array.isArray(output)) return output;
+  if (Array.isArray(output)) return output.map(toolResultPartToClaudeBlock);
   return stringifyToolOutput(output);
 }

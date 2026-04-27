@@ -110,6 +110,50 @@ const PI_BASH_FIXTURE = [
   .map((line) => JSON.stringify(line))
   .join("\n");
 
+const PI_LS_FIXTURE = [
+  {
+    type: "session",
+    version: 3,
+    id: "pi-tool-projection-ls",
+    timestamp: "2026-04-20T02:07:00.000Z",
+    cwd: "/tmp/lossless-agent-context",
+  },
+  {
+    type: "message",
+    id: "m_user",
+    parentId: null,
+    timestamp: "2026-04-20T02:07:01.000Z",
+    message: {
+      role: "user",
+      content: [{ type: "text", text: "list the directory" }],
+      timestamp: 1776650821000,
+    },
+  },
+  {
+    type: "message",
+    id: "m_assistant",
+    parentId: "m_user",
+    timestamp: "2026-04-20T02:07:02.000Z",
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "toolCall",
+          id: "call_ls_1",
+          name: "ls",
+          arguments: {
+            path: "/tmp/lossless-agent-context",
+            limit: 25,
+          },
+        },
+      ],
+      timestamp: 1776650822000,
+    },
+  },
+]
+  .map((line) => JSON.stringify(line))
+  .join("\n");
+
 const PI_EDIT_FIXTURE = [
   {
     type: "session",
@@ -201,6 +245,74 @@ const PI_MULTI_EDIT_FIXTURE = [
   .map((line) => JSON.stringify(line))
   .join("\n");
 
+const CLAUDE_EDIT_FIXTURE = [
+  {
+    type: "system",
+    subtype: "init",
+    timestamp: "2026-04-20T02:20:00.000Z",
+    sessionId: "claude-tool-projection-edit",
+    cwd: "/tmp/lossless-agent-context",
+  },
+  {
+    type: "assistant",
+    timestamp: "2026-04-20T02:20:01.000Z",
+    sessionId: "claude-tool-projection-edit",
+    cwd: "/tmp/lossless-agent-context",
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "tool_use",
+          id: "call_claude_edit_1",
+          name: "Edit",
+          input: {
+            file_path: "/tmp/lossless-agent-context/README.md",
+            old_string: "old",
+            new_string: "new",
+            replace_all: false,
+          },
+        },
+      ],
+    },
+  },
+  {
+    type: "user",
+    timestamp: "2026-04-20T02:20:02.000Z",
+    sessionId: "claude-tool-projection-edit",
+    cwd: "/tmp/lossless-agent-context",
+    message: {
+      role: "user",
+      content: [
+        {
+          type: "tool_result",
+          tool_use_id: "call_claude_edit_1",
+          content: "updated",
+          is_error: false,
+        },
+      ],
+    },
+    toolUseResult: {
+      filePath: "/tmp/lossless-agent-context/README.md",
+      oldString: "old",
+      newString: "new",
+      originalFile: null,
+      structuredPatch: [
+        {
+          oldStart: 1,
+          oldLines: 3,
+          newStart: 1,
+          newLines: 3,
+          lines: [" alpha", "-old", "+new", " omega"],
+        },
+      ],
+      userModified: false,
+      replaceAll: false,
+    },
+  },
+]
+  .map((line) => JSON.stringify(line))
+  .join("\n");
+
 describe("Claude native tool projections", () => {
   it("projects Pi read to Claude Read while preserving the original canonical tool call and tool result", () => {
     const canonical = importPiSessionJsonl(PI_READ_FIXTURE);
@@ -271,6 +383,37 @@ describe("Claude native tool projections", () => {
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({ cmd: "echo hello" });
   });
 
+  it("projects Pi ls to Claude LS and restores the original Pi arguments on import", () => {
+    const canonical = importPiSessionJsonl(PI_LS_FIXTURE);
+    const claudeText = exportClaudeCodeJsonl(canonical);
+    const lines = parseJsonlObjectLines(claudeText);
+
+    const assistantLine = lines.find((line) => line.type === "assistant");
+    expect(assistantLine).toBeDefined();
+
+    const assistantContent = ((assistantLine?.message as Record<string, unknown> | undefined)?.content ?? []) as Array<
+      Record<string, unknown>
+    >;
+    const toolUse = assistantContent.find((part) => part.type === "tool_use");
+    expect(toolUse).toEqual({
+      type: "tool_use",
+      id: "call_ls_1",
+      name: "LS",
+      input: {
+        path: "/tmp/lossless-agent-context",
+        limit: 25,
+      },
+    });
+
+    const reimported = importClaudeCodeJsonl(claudeText);
+    const toolCall = reimported.find((event) => event.kind === "tool.call");
+    expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("ls");
+    expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({
+      path: "/tmp/lossless-agent-context",
+      limit: 25,
+    });
+  });
+
   it("projects single-edit Pi edit calls into Claude Edit while preserving the original canonical arguments", () => {
     const canonical = importPiSessionJsonl(PI_EDIT_FIXTURE);
     const claudeText = exportClaudeCodeJsonl(canonical);
@@ -327,6 +470,22 @@ describe("Claude native tool projections", () => {
           { oldText: "old-b", newText: "new-b" },
         ],
       },
+    });
+  });
+
+  it("normalizes native Claude Edit calls back into Pi edit arguments when the mapping is lossless", () => {
+    const canonical = importClaudeCodeJsonl(CLAUDE_EDIT_FIXTURE);
+    const toolCall = canonical.find((event) => event.kind === "tool.call");
+    const toolResult = canonical.find((event) => event.kind === "tool.result");
+
+    expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("edit");
+    expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({
+      path: "/tmp/lossless-agent-context/README.md",
+      edits: [{ oldText: "old", newText: "new" }],
+    });
+    expect(toolResult?.kind === "tool.result" ? toolResult.payload.details : undefined).toMatchObject({
+      firstChangedLine: 1,
+      diff: " 1 alpha\n-2 old\n+2 new\n 3 omega",
     });
   });
 

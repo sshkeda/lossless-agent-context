@@ -5,13 +5,31 @@ type ClaudeToolProjection = {
   input: unknown;
 };
 
+type PiToolProjection = {
+  name: string;
+  arguments: unknown;
+};
+
 type JsonRecord = Record<string, unknown>;
 type ToolProjectionRule = {
   targetName: string;
   buildInput: (args: JsonRecord | undefined, rawArguments: unknown) => unknown | undefined;
 };
+type ReverseToolProjectionRule = {
+  targetName: string;
+  buildArguments: (args: JsonRecord | undefined, rawArguments: unknown) => unknown | undefined;
+};
 
-const PASSTHROUGH_CLAUDE_TOOL_NAMES = new Set(["Read", "Grep", "Glob", "Bash", "Edit", "Write"]);
+export const PI_MCP_PROXY_PREFIX = "pi_mcp_proxy__";
+const CLAUDE_PI_MCP_PREFIX = "mcp__pi-tools__";
+
+export function normalizePiMcpToolName(name: string): string {
+  if (name.startsWith(PI_MCP_PROXY_PREFIX)) return name.slice(PI_MCP_PROXY_PREFIX.length);
+  if (name.startsWith(CLAUDE_PI_MCP_PREFIX)) return name.slice(CLAUDE_PI_MCP_PREFIX.length);
+  return name;
+}
+
+const PASSTHROUGH_CLAUDE_TOOL_NAMES = new Set(["Read", "Grep", "Glob", "Bash", "Edit", "Write", "LS"]);
 
 function asRecord(value: unknown): JsonRecord | undefined {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : undefined;
@@ -105,6 +123,69 @@ function projectGlob(args: JsonRecord | undefined): JsonRecord | undefined {
   return { pattern };
 }
 
+function projectLs(args: JsonRecord | undefined): JsonRecord {
+  return withDefinedFields({}, [
+    ["path", readString(args, "path")],
+    ["limit", readNumber(args, "limit")],
+  ]);
+}
+
+function normalizeClaudeRead(args: JsonRecord | undefined): JsonRecord | undefined {
+  const path = readString(args, "file_path");
+  if (!path) return undefined;
+  return withDefinedFields({ path }, [
+    ["offset", readNumber(args, "offset")],
+    ["limit", readNumber(args, "limit")],
+  ]);
+}
+
+function normalizeClaudeBash(args: JsonRecord | undefined): JsonRecord | undefined {
+  const command = readString(args, "command");
+  if (!command) return undefined;
+  return withDefinedFields({ command }, [["description", readString(args, "description")]]);
+}
+
+function normalizeClaudeWrite(args: JsonRecord | undefined): JsonRecord | undefined {
+  const path = readString(args, "file_path");
+  const content = readString(args, "content");
+  if (!path || content === undefined) return undefined;
+  return { path, content };
+}
+
+function normalizeClaudeEdit(args: JsonRecord | undefined): JsonRecord | undefined {
+  const path = readString(args, "file_path");
+  const oldText = readString(args, "old_string");
+  const newText = readString(args, "new_string");
+  if (!path || oldText === undefined || newText === undefined) return undefined;
+  if (readBoolean(args, "replace_all") === true) return undefined;
+  return { path, edits: [{ oldText, newText }] };
+}
+
+function normalizeClaudeGrep(args: JsonRecord | undefined): JsonRecord | undefined {
+  const pattern = readString(args, "pattern");
+  if (!pattern) return undefined;
+  return withDefinedFields({ pattern }, [
+    ["path", readString(args, "path")],
+    ["glob", readString(args, "glob")],
+    ["output_mode", readString(args, "output_mode")],
+    ["head_limit", readNumber(args, "head_limit")],
+    ["-i", readBoolean(args, "-i")],
+  ]);
+}
+
+function normalizeClaudeGlob(args: JsonRecord | undefined): JsonRecord | undefined {
+  const pattern = readString(args, "pattern");
+  if (!pattern) return undefined;
+  return { pattern };
+}
+
+function normalizeClaudeLs(args: JsonRecord | undefined): JsonRecord | undefined {
+  return withDefinedFields({}, [
+    ["path", readString(args, "path")],
+    ["limit", readNumber(args, "limit")],
+  ]);
+}
+
 const TOOL_PROJECTION_RULES: Record<string, ToolProjectionRule> = {
   read: {
     targetName: "Read",
@@ -134,12 +215,47 @@ const TOOL_PROJECTION_RULES: Record<string, ToolProjectionRule> = {
     targetName: "Glob",
     buildInput: (args) => projectGlob(args),
   },
+  ls: {
+    targetName: "LS",
+    buildInput: (args) => projectLs(args),
+  },
+};
+
+const CLAUDE_TO_PI_TOOL_PROJECTION_RULES: Record<string, ReverseToolProjectionRule> = {
+  Read: {
+    targetName: "read",
+    buildArguments: (args) => normalizeClaudeRead(args),
+  },
+  Bash: {
+    targetName: "bash",
+    buildArguments: (args) => normalizeClaudeBash(args),
+  },
+  Write: {
+    targetName: "write",
+    buildArguments: (args) => normalizeClaudeWrite(args),
+  },
+  Edit: {
+    targetName: "edit",
+    buildArguments: (args) => normalizeClaudeEdit(args),
+  },
+  Grep: {
+    targetName: "grep",
+    buildArguments: (args) => normalizeClaudeGrep(args),
+  },
+  Glob: {
+    targetName: "glob",
+    buildArguments: (args) => normalizeClaudeGlob(args),
+  },
+  LS: {
+    targetName: "ls",
+    buildArguments: (args) => normalizeClaudeLs(args),
+  },
 };
 
 export function projectToolCallToClaude(
   event: Extract<CanonicalEvent, { kind: "tool.call" }>,
 ): ClaudeToolProjection | null {
-  const name = event.payload.name;
+  const name = normalizePiMcpToolName(event.payload.name);
 
   if (PASSTHROUGH_CLAUDE_TOOL_NAMES.has(name)) {
     return {
@@ -155,4 +271,18 @@ export function projectToolCallToClaude(
   const input = rule.buildInput(args, event.payload.arguments);
   if (input === undefined) return null;
   return { name: rule.targetName, input };
+}
+
+export function projectClaudeToolCallToPi(name: string, input: unknown): PiToolProjection {
+  const normalizedName = normalizePiMcpToolName(name);
+  const args = asRecord(input);
+  const rule = CLAUDE_TO_PI_TOOL_PROJECTION_RULES[normalizedName];
+  if (!rule) {
+    return { name: normalizedName, arguments: input ?? {} };
+  }
+  const normalizedArguments = rule.buildArguments(args, input);
+  if (normalizedArguments === undefined) {
+    return { name: normalizedName, arguments: input ?? {} };
+  }
+  return { name: rule.targetName, arguments: normalizedArguments };
 }
