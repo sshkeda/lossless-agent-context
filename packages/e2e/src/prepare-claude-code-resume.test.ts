@@ -437,6 +437,109 @@ describe("prepareClaudeCodeResumeSeed", () => {
     ]);
   });
 
+  it("sanitizes cross-provider tool ids that violate claude's tool_use.id regex", () => {
+    // Pi session that started with openai-codex. Codex stores toolCallIds as
+    // `call_<call_id>|fc_<function_call_id>` because both are needed for
+    // Responses-API replay. The `|` is fine for codex but Anthropic's API
+    // rejects any tool_use.id that doesn't match `^[a-zA-Z0-9_-]+$` with
+    //   messages.N.content.M.tool_use.id: String should match pattern '^[a-zA-Z0-9_-]+$'
+    // The seed prep must rewrite both the assistant tool_use.id and the
+    // matching user tool_result.tool_use_id consistently so claude still sees
+    // a paired call/result.
+    const codexId = "call_EBCp3MVfuIhi2nKKkcsrDBBe|fc_0fcd27f083613e7d0169eed3a44734819b913c64a9f766b62f";
+    const piJsonl = [
+      { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
+      { type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-21T00:00:00.100Z", provider: "openai-codex", modelId: "gpt-5.5" },
+      { type: "message", id: "u1", parentId: null, timestamp: "2026-04-21T00:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "read it" }], timestamp: 1 } },
+      {
+        type: "message",
+        id: "a1",
+        parentId: "u1",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        message: {
+          role: "assistant",
+          content: [{ type: "toolCall", id: codexId, name: "read", arguments: { path: "/tmp/x.md" } }],
+          api: "openai-codex-responses",
+          provider: "openai-codex",
+          model: "gpt-5.5",
+          usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: "toolUse",
+          timestamp: 2,
+        },
+      },
+      {
+        type: "message",
+        id: "r1",
+        parentId: "a1",
+        timestamp: "2026-04-21T00:00:03.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: codexId,
+          toolName: "read",
+          content: [{ type: "text", text: "file contents" }],
+          isError: false,
+          timestamp: 3,
+        },
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    const idPattern = /^[a-zA-Z0-9_-]+$/;
+
+    const toolUseBlocks: Array<{ id: string }> = [];
+    const toolResultBlocks: Array<{ tool_use_id: string }> = [];
+    for (const line of seedObjects) {
+      const content = line.message?.content;
+      if (!Array.isArray(content)) continue;
+      for (const block of content) {
+        if (block?.type === "tool_use" && typeof block.id === "string") toolUseBlocks.push(block);
+        if (block?.type === "tool_result" && typeof block.tool_use_id === "string") toolResultBlocks.push(block);
+      }
+    }
+
+    expect(toolUseBlocks).toHaveLength(1);
+    expect(toolResultBlocks).toHaveLength(1);
+    expect(idPattern.test(toolUseBlocks[0].id)).toBe(true);
+    expect(idPattern.test(toolResultBlocks[0].tool_use_id)).toBe(true);
+    // Pairing must survive: the rewritten ids must still match each other so
+    // claude sees a complete tool_use -> tool_result cycle.
+    expect(toolUseBlocks[0].id).toBe(toolResultBlocks[0].tool_use_id);
+  });
+
+  it("jsonl overload: sanitizes pre-exported claude-code jsonl tool ids that violate the regex", () => {
+    // Same regex violation, but the input is already claude-code jsonl whose
+    // tool_use.id slipped through (e.g. someone exported a cross-provider
+    // session with Codex ids before this fix existed). The jsonl overload
+    // must still sanitize so resume succeeds.
+    const codexId = "call_X|fc_Y";
+    const malformedClaudeJsonl = [
+      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
+      { type: "assistant", parentUuid: "u0", uuid: "u1", timestamp: "2026-04-21T00:00:01.000Z", sessionId: "orig", message: { role: "assistant", content: [{ type: "tool_use", id: codexId, name: "Bash", input: { command: "pwd" } }] } },
+      { type: "user", parentUuid: "u1", uuid: "u2", timestamp: "2026-04-21T00:00:02.000Z", sessionId: "orig", message: { role: "user", content: [{ type: "tool_result", tool_use_id: codexId, content: "/tmp", is_error: false }] } },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "target-session-id");
+    const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
+    const idPattern = /^[a-zA-Z0-9_-]+$/;
+    const toolUse = seedObjects
+      .flatMap((o) => Array.isArray(o.message?.content) ? o.message.content : [])
+      .find((b: { type?: string }) => b?.type === "tool_use");
+    const toolResult = seedObjects
+      .flatMap((o) => Array.isArray(o.message?.content) ? o.message.content : [])
+      .find((b: { type?: string }) => b?.type === "tool_result");
+
+    expect(toolUse).toBeDefined();
+    expect(toolResult).toBeDefined();
+    expect(idPattern.test(toolUse.id)).toBe(true);
+    expect(idPattern.test(toolResult.tool_use_id)).toBe(true);
+    expect(toolUse.id).toBe(toolResult.tool_use_id);
+  });
+
   it("rewrites sessionId on every kept line", () => {
     const claudeJsonl = [
       { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "old-id", cwd: "/tmp" },

@@ -17,6 +17,31 @@ function stripRejectedToolResultFields(value: unknown): void {
   }
 }
 
+// Anthropic's API rejects tool_use.id (and the matching tool_result.tool_use_id)
+// when it contains characters outside `^[a-zA-Z0-9_-]+$`. This bites cross-
+// provider seeds: openai-codex toolCallIds are stored as `call_<id>|fc_<id>`
+// because Responses-API replay needs both, and the `|` makes claude reject the
+// resume with `messages.N.content.M.tool_use.id: String should match pattern
+// '^[a-zA-Z0-9_-]+$'`. Replacing every disallowed char with `_` keeps the
+// rewrite deterministic so the assistant tool_use and the user tool_result
+// land on the same id and stay paired.
+function sanitizeClaudeToolUseId(id: string): string {
+  return id.replace(/[^a-zA-Z0-9_-]/g, "_");
+}
+
+function sanitizeClaudeToolUseIds(value: unknown): void {
+  if (!Array.isArray(value)) return;
+  for (const block of value) {
+    if (!block || typeof block !== "object" || Array.isArray(block)) continue;
+    const record = block as Record<string, unknown>;
+    if (record.type === "tool_use" && typeof record.id === "string") {
+      record.id = sanitizeClaudeToolUseId(record.id);
+    } else if (record.type === "tool_result" && typeof record.tool_use_id === "string") {
+      record.tool_use_id = sanitizeClaudeToolUseId(record.tool_use_id);
+    }
+  }
+}
+
 function synthesizeClaudeMessageId(line: Record<string, unknown>, lineIndex: number): string {
   const seed = JSON.stringify({
     sessionId: line.sessionId,
@@ -98,6 +123,7 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
           });
           if (filtered.length === 0) continue;
           messageRecord.content = filtered;
+          sanitizeClaudeToolUseIds(filtered);
         }
         ensureAssistantMessageId(obj, lineIndex);
       }
@@ -106,7 +132,9 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
     if (type === "user") {
       const message = obj.message;
       if (message && typeof message === "object" && !Array.isArray(message)) {
-        stripRejectedToolResultFields((message as Record<string, unknown>).content);
+        const content = (message as Record<string, unknown>).content;
+        stripRejectedToolResultFields(content);
+        sanitizeClaudeToolUseIds(content);
       }
     }
 
