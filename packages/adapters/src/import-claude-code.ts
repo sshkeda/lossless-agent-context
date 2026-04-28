@@ -5,7 +5,7 @@ import {
   isForeignLine,
   readCanonicalOverrides,
 } from "./cross-provider";
-import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
+import { CLAUDE_CODE_IDS_EXTENSION, LOSSLESS_RECOVERY_KEY } from "./defaults";
 import {
   createEvent,
   DEFAULT_BRANCH_ID,
@@ -22,15 +22,29 @@ import { projectClaudeToolCallToPi } from "./tool-projections";
 type Extensions = Record<string, unknown> | undefined;
 const TOOL_RESULT_DETAILS_KEY = "lossless-agent-context/toolResultDetails";
 
-// Pattern for the cross-provider thinking demotion done by
-// prepareClaudeCodeResumeSeed. Anchored on both ends so a text block that
-// merely *mentions* `<thinking>` is left alone — only an exact-shape wrapped
-// block is recovered. Capture group 1 holds the original reasoning text.
-const DEMOTED_THINKING_PATTERN = /^<thinking>\n([\s\S]*?)\n<\/thinking>$/;
-
-function extractDemotedThinkingText(text: string): string | undefined {
-  const match = DEMOTED_THINKING_PATTERN.exec(text);
-  return match ? match[1] : undefined;
+// Reads the lac recovery markers stashed on a claude-code session JSONL line
+// (a sibling of `message`, NOT inside the API message body). Currently the
+// only marker is `demotedReasoning`, which records which `text` blocks in the
+// assistant content[] array were promoted-from-foreign-thinking by
+// prepareClaudeCodeResumeSeed. We use this to deterministically restore the
+// original `reasoning.created` event on import — no regex, no false matches
+// on text that merely contains `<thinking>` substrings. See the HACK note in
+// prepare-claude-code-resume.ts for why the demotion exists in the first
+// place (claude requires a claude-minted signature on every thinking block).
+function readDemotedReasoningByContentIndex(line: Record<string, unknown>): Map<number, string> {
+  const wrapper = line[LOSSLESS_RECOVERY_KEY];
+  if (!wrapper || typeof wrapper !== "object" || Array.isArray(wrapper)) return new Map();
+  const list = (wrapper as Record<string, unknown>).demotedReasoning;
+  if (!Array.isArray(list)) return new Map();
+  const result = new Map<number, string>();
+  for (const entry of list) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.contentIndex === "number" && typeof record.originalText === "string") {
+      result.set(record.contentIndex, record.originalText);
+    }
+  }
+  return result;
 }
 type ResolvedClaudeLineTimestamp = {
   synthetic: boolean;
@@ -407,6 +421,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
           const message = line.message as Record<string, unknown> | undefined;
           const content = Array.isArray(message?.content) ? message?.content : [];
           const cache = cacheFromClaudeMessage(message);
+          const demotedReasoningByIndex = readDemotedReasoningByContentIndex(line);
 
           for (const [partIndex, part] of content.entries()) {
             if (!part || typeof part !== "object") continue;
@@ -441,14 +456,13 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
               // Recovery for the cross-provider thinking demotion: a previous
               // pass through prepareClaudeCodeResumeSeed wrapped foreign
               // (unsigned) thinking blocks in `<thinking>...</thinking>` text
-              // so claude could resume. Re-promote any text block whose
-              // entire content matches that exact shape back to a native
-              // `reasoning.created` event so a subsequent codex export emits
-              // a proper `reasoning` response item rather than leaking the
-              // tags as plain text. The pattern is anchored — a text block
-              // that merely *mentions* `<thinking>` is left alone.
-              const demotedReasoning = extractDemotedThinkingText(record.text);
-              if (demotedReasoning !== undefined) {
+              // and recorded the original chain-of-thought in the line
+              // wrapper's `losslessAgentContext.demotedReasoning[]` keyed by
+              // contentIndex. If this text block was one of those, restore
+              // the canonical `reasoning.created` event using the recorded
+              // text — exact, deterministic, no regex.
+              const demotedReasoningText = demotedReasoningByIndex.get(partIndex);
+              if (demotedReasoningText !== undefined) {
                 createEvent(events, {
                   sessionId,
                   branchId,
@@ -457,7 +471,7 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
                   actor: { type: "assistant" },
                   payload: {
                     visibility: "summary",
-                    text: demotedReasoning,
+                    text: demotedReasoningText,
                     providerExposed: true,
                   },
                   cache,

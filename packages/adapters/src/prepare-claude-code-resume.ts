@@ -1,4 +1,5 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
+import { LOSSLESS_RECOVERY_KEY } from "./defaults";
 import { exportClaudeCodeJsonl } from "./export-claude-code";
 import { deterministicUuid } from "./utils";
 
@@ -55,16 +56,38 @@ function sanitizeClaudeToolUseId(id: string): string {
 // If a future API ever lets a non-claude signature pass through, or claude
 // learns to verify foreign signatures, we should remove this demotion and
 // pass thinking blocks natively.
-function demoteUnsignedThinkingBlocks(content: unknown[]): unknown[] {
-  return content.flatMap((block) => {
-    if (!block || typeof block !== "object" || Array.isArray(block)) return [block];
+type DemotedThinkingMarker = {
+  contentIndex: number;
+  originalText: string;
+};
+
+function demoteUnsignedThinkingBlocks(content: unknown[]): {
+  content: unknown[];
+  demoted: DemotedThinkingMarker[];
+} {
+  const transformed: unknown[] = [];
+  const demoted: DemotedThinkingMarker[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object" || Array.isArray(block)) {
+      transformed.push(block);
+      continue;
+    }
     const record = block as Record<string, unknown>;
-    if (record.type !== "thinking") return [block];
-    if (typeof record.signature === "string" && record.signature.length > 0) return [block];
+    if (record.type !== "thinking") {
+      transformed.push(block);
+      continue;
+    }
+    if (typeof record.signature === "string" && record.signature.length > 0) {
+      transformed.push(block);
+      continue;
+    }
     const text = typeof record.thinking === "string" ? record.thinking : "";
-    if (text.trim().length === 0) return [];
-    return [{ type: "text", text: `<thinking>\n${text}\n</thinking>` }];
-  });
+    if (text.trim().length === 0) continue;
+    const contentIndex = transformed.length;
+    transformed.push({ type: "text", text: `<thinking>\n${text}\n</thinking>` });
+    demoted.push({ contentIndex, originalText: text });
+  }
+  return { content: transformed, demoted };
 }
 
 function sanitizeClaudeToolUseIds(value: unknown): void {
@@ -153,10 +176,26 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
         const messageRecord = message as Record<string, unknown>;
         const content = messageRecord.content;
         if (Array.isArray(content)) {
-          const transformed = demoteUnsignedThinkingBlocks(content);
+          const { content: transformed, demoted } = demoteUnsignedThinkingBlocks(content);
           if (transformed.length === 0) continue;
           messageRecord.content = transformed;
           sanitizeClaudeToolUseIds(transformed);
+          if (demoted.length > 0) {
+            // Stash the recovery markers on the JSONL line wrapper (a sibling
+            // of `message`, NOT inside it). Claude Code's API forwards only
+            // `message.content` to claude — the wrapper is session-only — so
+            // the markers ride along the seed without affecting what claude
+            // sees. importClaudeCodeJsonl reads them back to deterministically
+            // promote the matching text blocks back to `reasoning.created`
+            // events for downstream codex export. No regex / pattern-matching.
+            const existing = obj[LOSSLESS_RECOVERY_KEY];
+            const wrapper =
+              existing && typeof existing === "object" && !Array.isArray(existing)
+                ? { ...(existing as Record<string, unknown>) }
+                : {};
+            wrapper.demotedReasoning = demoted;
+            obj[LOSSLESS_RECOVERY_KEY] = wrapper;
+          }
         }
         ensureAssistantMessageId(obj, lineIndex);
       }
