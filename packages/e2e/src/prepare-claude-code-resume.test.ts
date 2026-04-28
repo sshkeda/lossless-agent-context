@@ -150,12 +150,15 @@ describe("prepareClaudeCodeResumeSeed", () => {
     expect(seedObjects.every((obj) => obj.sessionId === "target-session-id")).toBe(true);
   });
 
-  it("strips foreign thinking blocks that have no claude signature", () => {
+  it("demotes unsigned foreign thinking blocks to text so claude keeps the reasoning history", () => {
     // Pi session with an openai-codex assistant message carrying a thinking
     // block — its `thinkingSignature` is OpenAI's encrypted reasoning ID,
     // NOT a claude signature. Exporting to claude-code yields `{type:"thinking"}`
     // with no signature, which claude's API rejects:
     //   messages.N.content.M.thinking.signature: Field required
+    // Previously the seed prep dropped these, silently losing every codex
+    // chain-of-thought. Now it demotes them to a `<thinking>...</thinking>`
+    // wrapped text block so claude has the reasoning history when resuming.
     const piJsonl = [
       { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
       { type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-21T00:00:00.100Z", provider: "openai-codex", modelId: "gpt-5.4" },
@@ -171,16 +174,15 @@ describe("prepareClaudeCodeResumeSeed", () => {
     const seedLines = seed.split("\n").filter((l) => l.trim().length > 0);
     const invalid: Array<{ line: number; block: number }> = [];
     let userTextPreserved = false;
+    let demotedThinkingPreserved = false;
+    let originalAssistantTextPreserved = false;
     for (const [i, line] of seedLines.entries()) {
       const obj = JSON.parse(line);
-      // sessionId must be rewritten
       expect(obj.sessionId).toBe("target-session-id");
-      // only claude-accepted types should survive
       expect(new Set(["system", "user", "assistant", "summary", "attachment"]).has(obj.type)).toBe(true);
 
       if (obj.type === "user") {
         const content = obj.message?.content;
-        // claude-code accepts both string and array content for user messages.
         if (typeof content === "string" && content === "hey") userTextPreserved = true;
         if (Array.isArray(content) && content.some((p) => p?.type === "text" && p.text === "hey")) {
           userTextPreserved = true;
@@ -194,22 +196,32 @@ describe("prepareClaudeCodeResumeSeed", () => {
             const hasSig = typeof block.signature === "string" && block.signature.length > 0;
             if (!hasSig) invalid.push({ line: i, block: j });
           }
+          if (block?.type === "text" && typeof block.text === "string") {
+            if (block.text === "<thinking>\ncodex reasoning\n</thinking>") demotedThinkingPreserved = true;
+            if (block.text === "Hey!") originalAssistantTextPreserved = true;
+          }
         }
       }
     }
+    // No unsigned thinking blocks survive (claude API would reject them)
     expect(invalid).toEqual([]);
     expect(userTextPreserved).toBe(true);
+    // Demoted thinking text and the original assistant text both survive
+    expect(demotedThinkingPreserved).toBe(true);
+    expect(originalAssistantTextPreserved).toBe(true);
   });
 
   it("drops assistant lines whose content becomes empty after stripping", () => {
     // Pi session whose assistant message contains ONLY a foreign thinking
-    // block. After stripping, the content array is empty — the whole line
-    // should be dropped (empty-content assistant messages are invalid).
+    // block whose text is empty (codex reasoning items where summary[] was
+    // empty come across as `thinking: ""`). With no recoverable text to
+    // demote, the whole line should be dropped — empty-content assistant
+    // messages are invalid.
     const piJsonl = [
       { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
       { type: "model_change", id: "m1", parentId: null, timestamp: "2026-04-21T00:00:00.100Z", provider: "openai-codex", modelId: "gpt-5.4" },
       { type: "message", id: "u1", parentId: null, timestamp: "2026-04-21T00:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "hi" }], timestamp: 1 } },
-      { type: "message", id: "a1", parentId: "u1", timestamp: "2026-04-21T00:00:02.000Z", message: { role: "assistant", content: [{ type: "thinking", thinking: "only thinking", thinkingSignature: '{"id":"rs_z"}' }], api: "openai-codex-responses", provider: "openai-codex", model: "gpt-5.4", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: 2 } },
+      { type: "message", id: "a1", parentId: "u1", timestamp: "2026-04-21T00:00:02.000Z", message: { role: "assistant", content: [{ type: "thinking", thinking: "", thinkingSignature: '{"id":"rs_z"}' }], api: "openai-codex-responses", provider: "openai-codex", model: "gpt-5.4", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: "stop", timestamp: 2 } },
     ]
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
@@ -247,9 +259,11 @@ describe("prepareClaudeCodeResumeSeed", () => {
     expect(assistantLine.sessionId).toBe("target-session-id");
   });
 
-  it("jsonl overload: strips thinking blocks from pre-exported claude-code jsonl", () => {
+  it("jsonl overload: demotes unsigned thinking blocks in pre-exported claude-code jsonl", () => {
     // Direct input of malformed claude-code jsonl (thinking without signature)
-    // — the helper must still strip, without needing to go through canonical.
+    // — the helper must still rewrite, without needing to go through canonical.
+    // Unsigned thinking is demoted to a `<thinking>...</thinking>` text block
+    // so the reasoning history survives.
     const malformedClaudeJsonl = [
       { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
       { type: "assistant", parentUuid: "u0", uuid: "u1", timestamp: "2026-04-21T00:00:01.000Z", sessionId: "orig", message: { role: "assistant", content: [{ type: "thinking", thinking: "no sig" }, { type: "text", text: "hi" }] } },
@@ -264,8 +278,11 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .filter((l) => l.trim())
       .map((l) => JSON.parse(l))
       .find((o) => o.type === "assistant");
+    // No surviving raw thinking blocks (claude API would reject unsigned ones)
     expect(assistantLine?.message.content.some((b: { type: string }) => b.type === "thinking")).toBe(false);
+    // Original text and demoted thinking text both present
     expect(assistantLine?.message.content.some((b: { type: string; text?: string }) => b.type === "text" && b.text === "hi")).toBe(true);
+    expect(assistantLine?.message.content.some((b: { type: string; text?: string }) => b.type === "text" && b.text === "<thinking>\nno sig\n</thinking>")).toBe(true);
   });
 
   it("does not export Pi tool result details as Claude tool_result structuredContent", () => {

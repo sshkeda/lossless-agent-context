@@ -29,6 +29,44 @@ function sanitizeClaudeToolUseId(id: string): string {
   return id.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
+// HACK: cross-provider reasoning preservation.
+//
+// Claude's API requires every `{type:"thinking"}` block to carry a `signature`
+// produced by claude itself — an HMAC over the encrypted reasoning that only
+// claude can mint. Other providers' reasoning is fundamentally incompatible:
+// openai-codex stores reasoning as encrypted_content + a base64-summary; we
+// have neither the signing key nor a way to convert OpenAI's encrypted blob
+// into a claude-format signed thinking block. Round-tripping reasoning
+// natively across providers is therefore impossible without inventing fake
+// signatures (which would either be rejected or silently corrupt claude's
+// extended-thinking pipeline).
+//
+// The next-best option is to demote the unsigned thinking block into a plain
+// text block wrapped in `<thinking>` tags. Claude reads this as part of the
+// historical assistant turn — not as its own internal reasoning — so the
+// chain-of-thought survives the resume and informs the next turn. The wrapper
+// tags are a convention claude is trained on, so it interprets the block as
+// prior reasoning rather than something the assistant said out loud.
+//
+// Empty/whitespace-only thinking blocks (codex reasoning items whose
+// `summary[]` was empty) are dropped because there's no recoverable text —
+// only the encrypted blob existed and that's opaque to claude.
+//
+// If a future API ever lets a non-claude signature pass through, or claude
+// learns to verify foreign signatures, we should remove this demotion and
+// pass thinking blocks natively.
+function demoteUnsignedThinkingBlocks(content: unknown[]): unknown[] {
+  return content.flatMap((block) => {
+    if (!block || typeof block !== "object" || Array.isArray(block)) return [block];
+    const record = block as Record<string, unknown>;
+    if (record.type !== "thinking") return [block];
+    if (typeof record.signature === "string" && record.signature.length > 0) return [block];
+    const text = typeof record.thinking === "string" ? record.thinking : "";
+    if (text.trim().length === 0) return [];
+    return [{ type: "text", text: `<thinking>\n${text}\n</thinking>` }];
+  });
+}
+
 function sanitizeClaudeToolUseIds(value: unknown): void {
   if (!Array.isArray(value)) return;
   for (const block of value) {
@@ -115,15 +153,10 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
         const messageRecord = message as Record<string, unknown>;
         const content = messageRecord.content;
         if (Array.isArray(content)) {
-          const filtered = content.filter((block) => {
-            if (!block || typeof block !== "object") return true;
-            const blockRecord = block as Record<string, unknown>;
-            if (blockRecord.type !== "thinking") return true;
-            return typeof blockRecord.signature === "string" && blockRecord.signature.length > 0;
-          });
-          if (filtered.length === 0) continue;
-          messageRecord.content = filtered;
-          sanitizeClaudeToolUseIds(filtered);
+          const transformed = demoteUnsignedThinkingBlocks(content);
+          if (transformed.length === 0) continue;
+          messageRecord.content = transformed;
+          sanitizeClaudeToolUseIds(transformed);
         }
         ensureAssistantMessageId(obj, lineIndex);
       }
