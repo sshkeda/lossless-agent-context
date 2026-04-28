@@ -1,4 +1,10 @@
-import { exportClaudeCodeJsonl, exportPiSessionJsonl, importClaudeCodeJsonl, importPiSessionJsonl , emptySidecar } from "@lossless-agent-context/adapters";
+import {
+  emptySidecar,
+  exportClaudeCodeJsonl,
+  exportPiSessionJsonl,
+  importClaudeCodeJsonl,
+  importPiSessionJsonl,
+} from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
 const PI_PROXY_FIXTURE = [
@@ -71,7 +77,9 @@ const CLAUDE_PROXY_FIXTURE = [
     cwd: "/tmp/lossless-agent-context",
     message: {
       role: "assistant",
-      content: [{ type: "tool_use", id: "call_proxy_2", name: "pi_mcp_proxy__ask_gpt", input: { prompt: "find bugs" } }],
+      content: [
+        { type: "tool_use", id: "call_proxy_2", name: "pi_mcp_proxy__ask_gpt", input: { prompt: "find bugs" } },
+      ],
     },
   },
   {
@@ -89,11 +97,15 @@ const CLAUDE_PROXY_FIXTURE = [
   .join("\n");
 
 function findToolCall(events: ReturnType<typeof importPiSessionJsonl> | ReturnType<typeof importClaudeCodeJsonl>) {
-  return events.find((event): event is Extract<(typeof events)[number], { kind: "tool.call" }> => event.kind === "tool.call");
+  return events.find(
+    (event): event is Extract<(typeof events)[number], { kind: "tool.call" }> => event.kind === "tool.call",
+  );
 }
 
 function findToolResult(events: ReturnType<typeof importPiSessionJsonl> | ReturnType<typeof importClaudeCodeJsonl>) {
-  return events.find((event): event is Extract<(typeof events)[number], { kind: "tool.result" }> => event.kind === "tool.result");
+  return events.find(
+    (event): event is Extract<(typeof events)[number], { kind: "tool.result" }> => event.kind === "tool.result",
+  );
 }
 
 function parseJsonlObjects(text: string): Array<Record<string, unknown>> {
@@ -120,7 +132,9 @@ describe("pi MCP proxy normalization", () => {
     const claudeText = exportClaudeCodeJsonl(canonical);
     const lines = parseJsonlObjects(claudeText);
     const assistantLine = lines.find((line) => line.type === "assistant");
-    const assistantContent = ((assistantLine?.message as Record<string, unknown> | undefined)?.content ?? []) as Array<Record<string, unknown>>;
+    const assistantContent = ((assistantLine?.message as Record<string, unknown> | undefined)?.content ?? []) as Array<
+      Record<string, unknown>
+    >;
     const toolUse = assistantContent.find((part) => part.type === "tool_use");
 
     expect(toolUse?.name).toBe("ask_gpt");
@@ -131,8 +145,12 @@ describe("pi MCP proxy normalization", () => {
     const toolCall = findToolCall(canonical);
     const piText = exportPiSessionJsonl(canonical);
     const lines = parseJsonlObjects(piText);
-    const assistantLine = lines.find((line) => (line.message as Record<string, unknown> | undefined)?.role === "assistant");
-    const assistantContent = ((assistantLine?.message as Record<string, unknown> | undefined)?.content ?? []) as Array<Record<string, unknown>>;
+    const assistantLine = lines.find(
+      (line) => (line.message as Record<string, unknown> | undefined)?.role === "assistant",
+    );
+    const assistantContent = ((assistantLine?.message as Record<string, unknown> | undefined)?.content ?? []) as Array<
+      Record<string, unknown>
+    >;
     const toolCallBlock = assistantContent.find((part) => part.type === "toolCall");
 
     expect(toolCall?.payload.name).toBe("ask_gpt");

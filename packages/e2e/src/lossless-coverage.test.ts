@@ -1,4 +1,9 @@
-import { importClaudeCodeJsonl, importCodexJsonl, importPiSessionJsonl } from "@lossless-agent-context/adapters";
+import {
+  emptySidecar,
+  importClaudeCodeJsonl,
+  importCodexJsonl,
+  importPiSessionJsonl,
+} from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
 import { readFixture } from "./fixtures";
@@ -12,7 +17,11 @@ type JsonlImporterCase = {
 
 const jsonlImporterCases: JsonlImporterCase[] = [
   { name: "pi", fixtureFile: "pi.jsonl", importToCanonical: importPiSessionJsonl },
-  { name: "claude-code", fixtureFile: "claude-code.jsonl", importToCanonical: importClaudeCodeJsonl },
+  {
+    name: "claude-code",
+    fixtureFile: "claude-code.jsonl",
+    importToCanonical: (input) => importClaudeCodeJsonl(input, emptySidecar()),
+  },
   { name: "codex", fixtureFile: "codex.jsonl", importToCanonical: importCodexJsonl },
 ];
 

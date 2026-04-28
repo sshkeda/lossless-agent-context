@@ -23,8 +23,12 @@ Current gap:
 ```bash
 bun install
 
-# Pi -> Claude Code
+# Pi -> Claude Code lossless conversion JSONL
 bun packages/cli/src/index.ts convert session.jsonl --to claude-code -o claude.jsonl
+
+# Claude Code resume-safe seed
+# Also writes claude-seed.jsonl.lossless.json when recovery metadata is needed.
+bun packages/cli/src/index.ts prepare-claude-code-resume session.jsonl --from pi -o claude-seed.jsonl
 
 # stdin piping, auto-detected source
 cat session.jsonl | bun packages/cli/src/index.ts convert - --to codex
@@ -48,9 +52,9 @@ Providers: `pi` | `claude-code` | `codex`. `--from` is auto-detected from the fi
 2. a canonical, append-only event model
 3. exporters back into any of the three native shapes
 
-When going cross-provider (e.g. Pi → Claude Code), the exporter carries foreign native lines as `__lac_foreign` / `__lac_canonical` sidecars so a subsequent Claude → Pi export produces the original Pi bytes.
+When going cross-provider (e.g. Pi → Claude Code), exporters embed foreign native line envelopes as `__lac_foreign` / `__lac_canonical` fields when the target provider can safely carry them. Claude Code resume seeds are stricter than generic conversion JSONL, so `prepare-claude-code-resume` writes an adjacent recovery sidecar when needed: `<file>.jsonl.lossless.json`. Keep that file next to the JSONL when converting back; the CLI reads it automatically for file-based Claude Code imports.
 
-## Scripts
+## Verification
 
 ```bash
 bun install
@@ -59,13 +63,17 @@ bun run verify:portable
 
 `verify:portable` runs lint + typecheck + the portable fixture-driven test suite. This is what CI proves.
 
-For a machine-local proof against real session logs (reads the most recent session from `~/.pi/agent/sessions`, `~/.claude/projects`, `~/.codex/archived_sessions`):
+Before cutting a production release from a machine that has the local CLIs and session stores available, also run the real-log gate:
 
 ```bash
 bun run test:real-logs
 ```
 
-Override the picked files with `LAC_REAL_PI_SESSION` / `LAC_REAL_CLAUDE_SESSION` / `LAC_REAL_CODEX_SESSION`.
+`test:real-logs` reads recent sessions from `~/.pi/agent/sessions`, `~/.claude/projects`, and `~/.codex/archived_sessions`, validates target-native output at each hop, and checks byte-identical same-provider round-trips. Override the picked files with `LAC_REAL_PI_SESSION` / `LAC_REAL_CLAUDE_SESSION` / `LAC_REAL_CODEX_SESSION`.
+
+## License
+
+MIT © 2026 sshkeda.
 
 ## Conversion coverage
 
@@ -73,4 +81,6 @@ Override the picked files with `LAC_REAL_PI_SESSION` / `LAC_REAL_CLAUDE_SESSION`
 - Claude Code JSONL ↔ canonical
 - Codex JSONL ↔ canonical
 - cross-provider export (e.g. Pi → Claude Code) with lossless `__lac_foreign` / `__lac_canonical` carry-through
+- deterministic recovery sidecars (`*.lossless.json`) for transforms that provider JSONL cannot safely carry directly, such as demoted reasoning markers
+- native Codex response items including messages, reasoning, function/custom tool calls, web search calls, and image generation calls
 - semantic Pi → Claude Code export validated by the real `@anthropic-ai/claude-agent-sdk` (`getSessionMessages` parses the converted output and returns the original Pi user/assistant chain)

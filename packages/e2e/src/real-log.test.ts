@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import {
+  emptySidecar,
   exportClaudeCodeJsonl,
   exportCodexJsonl,
   exportPiSessionJsonl,
@@ -33,7 +34,7 @@ const realLogCases: RealLogCase[] = [
   {
     name: "claude-code",
     envVar: "LAC_REAL_CLAUDE_SESSION",
-    importer: importClaudeCodeJsonl,
+    importer: (input) => importClaudeCodeJsonl(input, emptySidecar()),
   },
   {
     name: "codex",
@@ -191,7 +192,9 @@ describe("real local log e2e", () => {
         let canonical = original;
 
         for (const target of chain.path) {
-          const exported = exporters[target](canonical);
+          const exporter = exporters[target];
+          if (!exporter) throw new Error(`missing exporter for ${target}`);
+          const exported = exporter(canonical);
           await validateNativeText(target, exported, `${chain.source}-${index + 1}-to-${target}`);
           const importer = realLogCases.find((testCase) => testCase.name === target)?.importer;
           if (!importer) throw new Error(`missing importer for ${target}`);
@@ -218,13 +221,17 @@ describe("real local log e2e", () => {
 
       let canonical = testCase.importer(originalText);
       for (const target of ["pi", "claude-code", "codex", "pi", testCase.name] as const) {
-        const exported = exporters[target](canonical);
+        const exporter = exporters[target];
+        if (!exporter) throw new Error(`missing exporter for ${target}`);
+        const exported = exporter(canonical);
         const importer = realLogCases.find((other) => other.name === target)?.importer;
         if (!importer) throw new Error(`missing importer for ${target}`);
         canonical = importer(exported);
       }
 
-      const finalText = exporters[testCase.name](canonical);
+      const finalExporter = exporters[testCase.name];
+      if (!finalExporter) throw new Error(`missing exporter for ${testCase.name}`);
+      const finalText = finalExporter(canonical);
       expect(finalText, `${testCase.name} 4-hop roundtrip drift`).toBe(originalText);
     });
   }

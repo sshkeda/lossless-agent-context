@@ -1,9 +1,9 @@
 import {
+  emptySidecar,
   exportClaudeCodeJsonl,
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
-  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 import { readFixture } from "./fixtures";

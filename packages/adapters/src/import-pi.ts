@@ -5,6 +5,7 @@ import {
   importEmbeddedCrossProviderLine,
   readCanonicalOverrides,
 } from "./cross-provider";
+import { normalizePiMcpToolName } from "./tool-projections";
 import {
   createEvent,
   DEFAULT_BRANCH_ID,
@@ -15,7 +16,6 @@ import {
   toIsoTimestamp,
   withNativeRawRef,
 } from "./utils";
-import { normalizePiMcpToolName } from "./tool-projections";
 
 type Extensions = Record<string, unknown> | undefined;
 

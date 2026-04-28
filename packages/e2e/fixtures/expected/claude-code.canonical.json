@@ -82,10 +82,10 @@
         "cwd": "/tmp/lossless-agent-context",
         "message": {
           "role": "user",
-          "content": "what is admin creds?"
+          "content": "what is the demo config?"
         }
       },
-      "rawText": "{\"type\":\"user\",\"timestamp\":\"2026-03-17T00:19:54.623Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"user\",\"content\":\"what is admin creds?\"}}"
+      "rawText": "{\"type\":\"user\",\"timestamp\":\"2026-03-17T00:19:54.623Z\",\"sessionId\":\"claude-session-1\",\"cwd\":\"/tmp/lossless-agent-context\",\"message\":{\"role\":\"user\",\"content\":\"what is the demo config?\"}}"
     },
     "kind": "message.created",
     "payload": {
@@ -93,7 +93,7 @@
       "parts": [
         {
           "type": "text",
-          "text": "what is admin creds?"
+          "text": "what is the demo config?"
         }
       ]
     }

@@ -1,10 +1,10 @@
 import {
+  emptySidecar,
   exportCodexJsonl,
   importClaudeCodeJsonl,
   importPiSessionJsonl,
   type LosslessSidecar,
   prepareClaudeCodeResumeSeed,
-  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -31,57 +31,56 @@ import { describe, expect, it } from "vitest";
 describe("cross-provider thinking demotion round-trip", () => {
   it("recovers a native codex reasoning item via the sidecar when re-importing a claude session", () => {
     const codexReasoningText = "**Plan**: Read the file then act.";
-    const piJsonl =
-      [
-        { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
-        {
-          type: "model_change",
-          id: "m1",
-          parentId: null,
-          timestamp: "2026-04-21T00:00:00.100Z",
-          provider: "openai-codex",
-          modelId: "gpt-5.5",
-        },
-        {
-          type: "message",
-          id: "u1",
-          parentId: null,
-          timestamp: "2026-04-21T00:00:01.000Z",
-          message: { role: "user", content: [{ type: "text", text: "go" }], timestamp: 1 },
-        },
-        {
-          type: "message",
-          id: "a1",
-          parentId: "u1",
-          timestamp: "2026-04-21T00:00:02.000Z",
-          message: {
-            role: "assistant",
-            content: [
-              {
-                type: "thinking",
-                thinking: codexReasoningText,
-                thinkingSignature: '{"id":"rs_x","encrypted_content":"OPENAI","summary":[]}',
-              },
-              { type: "text", text: "OK done.", textSignature: '{"id":"msg_y"}' },
-            ],
-            api: "openai-codex-responses",
-            provider: "openai-codex",
-            model: "gpt-5.5",
-            usage: {
-              input: 1,
-              output: 1,
-              cacheRead: 0,
-              cacheWrite: 0,
-              totalTokens: 2,
-              cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    const piJsonl = `${[
+      { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
+      {
+        type: "model_change",
+        id: "m1",
+        parentId: null,
+        timestamp: "2026-04-21T00:00:00.100Z",
+        provider: "openai-codex",
+        modelId: "gpt-5.5",
+      },
+      {
+        type: "message",
+        id: "u1",
+        parentId: null,
+        timestamp: "2026-04-21T00:00:01.000Z",
+        message: { role: "user", content: [{ type: "text", text: "go" }], timestamp: 1 },
+      },
+      {
+        type: "message",
+        id: "a1",
+        parentId: "u1",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        message: {
+          role: "assistant",
+          content: [
+            {
+              type: "thinking",
+              thinking: codexReasoningText,
+              thinkingSignature: '{"id":"rs_x","encrypted_content":"OPENAI","summary":[]}',
             },
-            stopReason: "stop",
-            timestamp: 2,
+            { type: "text", text: "OK done.", textSignature: '{"id":"msg_y"}' },
+          ],
+          api: "openai-codex-responses",
+          provider: "openai-codex",
+          model: "gpt-5.5",
+          usage: {
+            input: 1,
+            output: 1,
+            cacheRead: 0,
+            cacheWrite: 0,
+            totalTokens: 2,
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
           },
+          stopReason: "stop",
+          timestamp: 2,
         },
-      ]
-        .map((obj) => JSON.stringify(obj))
-        .join("\n") + "\n";
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n")}\n`;
 
     // Step 1: pi session → canonical → claude resume seed (this is what
     // pi-claude-code writes when the user switches from codex to claude).
@@ -178,34 +177,33 @@ describe("cross-provider thinking demotion round-trip", () => {
     // or a user pasting an XML-tagged example) must never be misinterpreted
     // as a demoted reasoning block — even when the JSONL was not produced
     // by lac and there's no sidecar to consult.
-    const claudeJsonl =
-      [
-        {
-          type: "system",
-          subtype: "init",
-          uuid: "u0",
-          parentUuid: null,
-          timestamp: "2026-04-21T00:00:00.000Z",
-          sessionId: "orig",
-          cwd: "/tmp",
+    const claudeJsonl = `${[
+      {
+        type: "system",
+        subtype: "init",
+        uuid: "u0",
+        parentUuid: null,
+        timestamp: "2026-04-21T00:00:00.000Z",
+        sessionId: "orig",
+        cwd: "/tmp",
+      },
+      {
+        type: "assistant",
+        parentUuid: "u0",
+        uuid: "u1",
+        timestamp: "2026-04-21T00:00:01.000Z",
+        sessionId: "orig",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "I see <thinking>some pattern</thinking> in the docs." },
+            { type: "text", text: "<thinking>\nLooks like a thinking block but no sidecar exists.\n</thinking>" },
+          ],
         },
-        {
-          type: "assistant",
-          parentUuid: "u0",
-          uuid: "u1",
-          timestamp: "2026-04-21T00:00:01.000Z",
-          sessionId: "orig",
-          message: {
-            role: "assistant",
-            content: [
-              { type: "text", text: "I see <thinking>some pattern</thinking> in the docs." },
-              { type: "text", text: "<thinking>\nLooks like a thinking block but no sidecar exists.\n</thinking>" },
-            ],
-          },
-        },
-      ]
-        .map((obj) => JSON.stringify(obj))
-        .join("\n") + "\n";
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n")}\n`;
 
     // No sidecar passed → no recovery happens.
     const canonical = importClaudeCodeJsonl(claudeJsonl, emptySidecar());
@@ -227,35 +225,34 @@ describe("cross-provider thinking demotion round-trip", () => {
     // contentIndex=2 (model legitimately discussing the convention) must
     // NOT be promoted. Index-based recovery keyed by line uuid makes this
     // trivially correct.
-    const claudeJsonl =
-      [
-        {
-          type: "system",
-          subtype: "init",
-          uuid: "u0",
-          parentUuid: null,
-          timestamp: "2026-04-21T00:00:00.000Z",
-          sessionId: "orig",
-          cwd: "/tmp",
+    const claudeJsonl = `${[
+      {
+        type: "system",
+        subtype: "init",
+        uuid: "u0",
+        parentUuid: null,
+        timestamp: "2026-04-21T00:00:00.000Z",
+        sessionId: "orig",
+        cwd: "/tmp",
+      },
+      {
+        type: "assistant",
+        parentUuid: "u0",
+        uuid: "u1",
+        timestamp: "2026-04-21T00:00:01.000Z",
+        sessionId: "orig",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "text", text: "Spoken intro." },
+            { type: "text", text: "<thinking>\npromoted reasoning\n</thinking>" },
+            { type: "text", text: "Mention of <thinking>foo</thinking> in passing." },
+          ],
         },
-        {
-          type: "assistant",
-          parentUuid: "u0",
-          uuid: "u1",
-          timestamp: "2026-04-21T00:00:01.000Z",
-          sessionId: "orig",
-          message: {
-            role: "assistant",
-            content: [
-              { type: "text", text: "Spoken intro." },
-              { type: "text", text: "<thinking>\npromoted reasoning\n</thinking>" },
-              { type: "text", text: "Mention of <thinking>foo</thinking> in passing." },
-            ],
-          },
-        },
-      ]
-        .map((obj) => JSON.stringify(obj))
-        .join("\n") + "\n";
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n")}\n`;
 
     const sidecar: LosslessSidecar = {
       byLineUuid: {

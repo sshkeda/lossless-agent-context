@@ -2,9 +2,9 @@ import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { canonicalEventSchema, resolveCanonicalSchemaVersion } from "@lossless-agent-context/core";
 import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
 import { importClaudeCodeJsonl } from "./import-claude-code";
-import { emptySidecar } from "./recovery-sidecar";
 import { importCodexJsonl } from "./import-codex";
 import { importPiSessionJsonl } from "./import-pi";
+import { emptySidecar } from "./recovery-sidecar";
 import { stableJsonStringify } from "./utils";
 
 export const FOREIGN_TYPE = "lac:foreign";
@@ -502,6 +502,31 @@ export function emitTargetGroupedLines(
     lines.push(serialized);
   }
 
+  function canGroupWithNativeLine(
+    firstNative: NonNullable<CanonicalEvent["native"]>,
+    nextNative: NonNullable<CanonicalEvent["native"]>,
+    seenRawRefs: Set<string>,
+  ): boolean {
+    if (nextNative.source !== firstNative.source) return false;
+    if (nextNative.raw === firstNative.raw) return true;
+
+    // Cross-provider reimports reconstruct the same original physical line from
+    // a foreign envelope, so object identity may be lost. rawText + rawRef lets
+    // us regroup multiple canonical events from that one line without merging a
+    // later duplicate physical line: once a rawRef repeats, a new copy of the
+    // line has started.
+    if (
+      typeof firstNative.rawText === "string" &&
+      firstNative.rawText === nextNative.rawText &&
+      typeof nextNative.rawRef === "string" &&
+      !seenRawRefs.has(nextNative.rawRef)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
   let i = 0;
   while (i < events.length) {
     const event = events[i];
@@ -517,15 +542,16 @@ export function emitTargetGroupedLines(
     }
 
     if (native.source === target) {
-      const groupRawJson = JSON.stringify(native.raw);
       const sameGroup: CanonicalEvent[] = [event];
+      const seenRawRefs = new Set<string>();
+      if (typeof native.rawRef === "string") seenRawRefs.add(native.rawRef);
       let k = i + 1;
       while (k < events.length) {
         const next = events[k];
         if (!next) break;
         const nextNative = next.native;
-        if (!nextNative || nextNative.source !== native.source) break;
-        if (nextNative.raw !== native.raw && JSON.stringify(nextNative.raw) !== groupRawJson) break;
+        if (!nextNative || !canGroupWithNativeLine(native, nextNative, seenRawRefs)) break;
+        if (typeof nextNative.rawRef === "string") seenRawRefs.add(nextNative.rawRef);
         sameGroup.push(next);
         k++;
       }
@@ -561,14 +587,15 @@ export function emitTargetGroupedLines(
     }
 
     const group: CanonicalEvent[] = [event];
-    const groupRawJson = JSON.stringify(native.raw);
+    const seenRawRefs = new Set<string>();
+    if (typeof native.rawRef === "string") seenRawRefs.add(native.rawRef);
     let j = i + 1;
     while (j < events.length) {
       const next = events[j];
       if (!next) break;
       const nextNative = next.native;
-      if (!nextNative || nextNative.source !== native.source) break;
-      if (nextNative.raw !== native.raw && JSON.stringify(nextNative.raw) !== groupRawJson) break;
+      if (!nextNative || !canGroupWithNativeLine(native, nextNative, seenRawRefs)) break;
+      if (typeof nextNative.rawRef === "string") seenRawRefs.add(nextNative.rawRef);
       group.push(next);
       j++;
     }
@@ -583,7 +610,7 @@ export function emitTargetGroupedLines(
     const toPush = Array.isArray(result) ? result : [result];
 
     if (toPush.length > 0) {
-      const overrides = group.map((event) => stripInternalNativeOverride(buildCanonicalOverride(event)));
+      const overrides = group.map((event) => buildCanonicalOverride(event));
       const hasAnyOverride = overrides.some((o) => o !== null);
       if (hasAnyOverride) {
         if (toPush.length === group.length) {

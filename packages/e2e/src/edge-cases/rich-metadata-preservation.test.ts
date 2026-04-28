@@ -1,11 +1,11 @@
 import {
+  emptySidecar,
   exportClaudeCodeJsonl,
   exportCodexJsonl,
   exportPiSessionJsonl,
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
-  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { CANONICAL_SCHEMA_VERSION, type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -222,18 +222,20 @@ describe("edge case: tool.result.error cross-provider preservation", () => {
       cwd: "/tmp",
       message: {
         role: "user",
-        content: [{
-          type: "tool_result",
-          tool_use_id: "tu_details",
-          content: "ok",
-          structuredContent: {
-            [TOOL_RESULT_DETAILS_KEY]: {
-              method: "jina",
-              contentType: "text/html",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "tu_details",
+            content: "ok",
+            structuredContent: {
+              [TOOL_RESULT_DETAILS_KEY]: {
+                method: "jina",
+                contentType: "text/html",
+              },
             },
+            is_error: false,
           },
-          is_error: false,
-        }],
+        ],
       },
     })}\n`;
 

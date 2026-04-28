@@ -1,4 +1,9 @@
-import { importClaudeCodeJsonl, importCodexJsonl, importPiSessionJsonl } from "@lossless-agent-context/adapters";
+import {
+  emptySidecar,
+  importClaudeCodeJsonl,
+  importCodexJsonl,
+  importPiSessionJsonl,
+} from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 
 export type FixtureKind = "jsonl" | "json";
@@ -21,7 +26,7 @@ export const conversionCases: ConversionCase[] = [
     name: "claude-code",
     fixtureFile: "claude-code.jsonl",
     fixtureKind: "jsonl",
-    importToCanonical: importClaudeCodeJsonl,
+    importToCanonical: (input) => importClaudeCodeJsonl(input, emptySidecar()),
   },
   {
     name: "codex",

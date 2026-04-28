@@ -1,10 +1,10 @@
 import {
   CANONICAL_EVENT_TYPE,
+  emptySidecar,
   exportCodexJsonl,
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
-  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -187,7 +187,7 @@ describe("Codex SDK validation: real Codex JSONL schema accepts Claude -> Codex 
     const codexText = exportCodexJsonl(canonical);
     const reimported = importCodexJsonl(codexText);
 
-    expect(findFirstUserText(reimported)).toBe("what is admin creds?");
+    expect(findFirstUserText(reimported)).toBe("what is the demo config?");
     expect(findAllAssistantText(reimported)).toContain("Let me search the codebase for admin credential references.");
 
     const toolCall = findFirstToolCall(reimported);

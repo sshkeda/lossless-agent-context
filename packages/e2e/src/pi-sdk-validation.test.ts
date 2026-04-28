@@ -1,4 +1,9 @@
-import { exportPiSessionJsonl, importClaudeCodeJsonl, importCodexJsonl , emptySidecar } from "@lossless-agent-context/adapters";
+import {
+  emptySidecar,
+  exportPiSessionJsonl,
+  importClaudeCodeJsonl,
+  importCodexJsonl,
+} from "@lossless-agent-context/adapters";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import {
   buildSessionContext,
@@ -64,10 +69,10 @@ for (const { name } of LOSSLESS_CASES) {
       expect(userMessage).toBeDefined();
       if (userMessage && Array.isArray(userMessage.content)) {
         const textBlocks = userMessage.content.filter((c): c is { type: "text"; text: string } => c.type === "text");
-        expect(textBlocks.some((b) => b.text === "what is admin creds?")).toBe(true);
+        expect(textBlocks.some((b) => b.text === "what is the demo config?")).toBe(true);
       } else {
         expect(typeof userMessage?.content).toBe("string");
-        expect(userMessage?.content).toBe("what is admin creds?");
+        expect(userMessage?.content).toBe("what is the demo config?");
       }
 
       const assistantMessage = context.messages.find(isAssistantMessage);

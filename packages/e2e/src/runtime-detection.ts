@@ -63,10 +63,13 @@ function collectJsonlFiles(dir: string): string[] {
 }
 
 export function detectRealLogPaths(): RealLogPaths {
+  const pi = process.env.LAC_REAL_PI_SESSION ?? readDirLatestJsonl(join(homedir(), ".pi/agent/sessions"));
+  const claude = process.env.LAC_REAL_CLAUDE_SESSION ?? readDirLatestJsonl(join(homedir(), ".claude/projects"));
+  const codex = process.env.LAC_REAL_CODEX_SESSION ?? readDirLatestJsonl(join(homedir(), ".codex/archived_sessions"));
   return {
-    pi: process.env.LAC_REAL_PI_SESSION ?? readDirLatestJsonl(join(homedir(), ".pi/agent/sessions")),
-    claude: process.env.LAC_REAL_CLAUDE_SESSION ?? readDirLatestJsonl(join(homedir(), ".claude/projects")),
-    codex: process.env.LAC_REAL_CODEX_SESSION ?? readDirLatestJsonl(join(homedir(), ".codex/archived_sessions")),
+    ...(pi !== undefined ? { pi } : {}),
+    ...(claude !== undefined ? { claude } : {}),
+    ...(codex !== undefined ? { codex } : {}),
   };
 }
 

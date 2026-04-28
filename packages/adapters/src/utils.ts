@@ -5,23 +5,23 @@ import { CANONICAL_SCHEMA_VERSION, canonicalEventSchema } from "@lossless-agent-
 export { DEFAULT_BRANCH_ID } from "./defaults";
 
 export function parseJsonlWithText(text: string): Array<{ line: Record<string, unknown>; text: string }> {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line, index) => {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(line);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`Invalid JSONL at line ${index + 1}: ${message}`);
-      }
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-        throw new Error(`Invalid JSONL at line ${index + 1}: expected an object`);
-      }
-      return { line: parsed as Record<string, unknown>, text: line };
-    });
+  const entries: Array<{ line: Record<string, unknown>; text: string }> = [];
+  const physicalLines = text.split("\n");
+  for (const [index, lineText] of physicalLines.entries()) {
+    if (lineText.trim().length === 0) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(lineText);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid JSONL at line ${index + 1}: ${message}`);
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error(`Invalid JSONL at line ${index + 1}: expected an object`);
+    }
+    entries.push({ line: parsed as Record<string, unknown>, text: lineText });
+  }
+  return entries;
 }
 
 export function toIsoTimestamp(value: unknown, label = "timestamp"): string {

@@ -1,11 +1,11 @@
 import {
+  emptySidecar,
   exportClaudeCodeJsonl,
   exportCodexJsonl,
   exportPiSessionJsonl,
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
-  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";

@@ -16,11 +16,13 @@ correct or trivial. Suggestions are welcome; commits are not.
 ---
 
 - Assume `pi`, `claude`, and `codex` CLIs are installed and authenticated.
+- This repo is not intended to be published to npm, JSR, or any package registry. Do not optimize for registry packaging or treat `workspace:*` dependencies / source-based local scripts as release blockers. Expected use is cloning the repo locally and running it from the checkout.
 - Tests must fail if any required CLI or auth prerequisite is missing; do not skip those tests because prerequisites are absent.
 - When changing code in this repo, run the fullest machine-local verification gate that the repo defines when feasible, not just the portable/default suite.
 - Do not avoid machine-local verification merely because it depends on local CLIs, auth, or real session logs; this repo explicitly assumes those prerequisites exist.
 - If a full machine-local verification command fails, report the exact failing command and error rather than downgrading the verification claim.
 - Product intent is strict losslessness. Preserve all source information across imports/exports and keep emitted logs as close to native as possible without dropping data.
+- For Claude Code specifically: even though the installed `claude` CLI is a native/Bun executable, it contains inspectable bundled JavaScript. When behavior matters for native fidelity (accepted JSONL line types, resume parsing, transcript persistence, validation, etc.), inspect the installed binary/bundled JS with tools such as `strings`, byte-slice extraction, and targeted searches before assuming behavior. Prefer native Claude internals + real-session tests over guesses.
 - The strongest fidelity requirement is byte-identical native round-trips (`provider -> LAC -> other -> LAC -> provider`) wherever the target provider format can represent the source exactly.
 - Treat "provider resumes its own round-tripped session natively" as a first-class acceptance criterion, not just semantic equivalence.
 - Do not reframe same-provider failures as needing native-file replay special cases; if reconstruction is not byte-identical, the reconstruction is wrong.

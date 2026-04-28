@@ -1,10 +1,9 @@
 import {
-  exportClaudeCodeJsonl,
+  emptySidecar,
   exportCodexJsonl,
   importClaudeCodeJsonl,
   importCodexJsonl,
   prepareClaudeCodeResumeSeed,
-  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -36,42 +35,41 @@ import { describe, expect, it } from "vitest";
 describe("symmetric claude → codex → claude thinking round-trip", () => {
   it("preserves claude signed thinking text content across the codex hop", () => {
     const claudeReasoningText = "Let me think about this carefully — the user wants X, so I should do Y.";
-    const claudeJsonl =
-      [
-        {
-          type: "system",
-          subtype: "init",
-          uuid: "u0",
-          parentUuid: null,
-          timestamp: "2026-04-21T00:00:00.000Z",
-          sessionId: "orig",
-          cwd: "/tmp",
+    const claudeJsonl = `${[
+      {
+        type: "system",
+        subtype: "init",
+        uuid: "u0",
+        parentUuid: null,
+        timestamp: "2026-04-21T00:00:00.000Z",
+        sessionId: "orig",
+        cwd: "/tmp",
+      },
+      {
+        type: "user",
+        parentUuid: "u0",
+        uuid: "u1",
+        timestamp: "2026-04-21T00:00:01.000Z",
+        sessionId: "orig",
+        message: { role: "user", content: [{ type: "text", text: "do the thing" }] },
+      },
+      {
+        type: "assistant",
+        parentUuid: "u1",
+        uuid: "u2",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        sessionId: "orig",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude-hmac" },
+            { type: "text", text: "Here's the answer." },
+          ],
         },
-        {
-          type: "user",
-          parentUuid: "u0",
-          uuid: "u1",
-          timestamp: "2026-04-21T00:00:01.000Z",
-          sessionId: "orig",
-          message: { role: "user", content: [{ type: "text", text: "do the thing" }] },
-        },
-        {
-          type: "assistant",
-          parentUuid: "u1",
-          uuid: "u2",
-          timestamp: "2026-04-21T00:00:02.000Z",
-          sessionId: "orig",
-          message: {
-            role: "assistant",
-            content: [
-              { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude-hmac" },
-              { type: "text", text: "Here's the answer." },
-            ],
-          },
-        },
-      ]
-        .map((obj) => JSON.stringify(obj))
-        .join("\n") + "\n";
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n")}\n`;
 
     // Step 1: claude session → canonical
     const canonicalFromClaude = importClaudeCodeJsonl(claudeJsonl, emptySidecar());
@@ -184,34 +182,33 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // a recovery marker on the wrapper so a future re-export deterministically
     // reproduces the reasoning event.
     const reasoningText = "Pretend the signature is missing.";
-    const malformedClaudeJsonl =
-      [
-        {
-          type: "system",
-          subtype: "init",
-          uuid: "u0",
-          parentUuid: null,
-          timestamp: "2026-04-21T00:00:00.000Z",
-          sessionId: "orig",
-          cwd: "/tmp",
+    const malformedClaudeJsonl = `${[
+      {
+        type: "system",
+        subtype: "init",
+        uuid: "u0",
+        parentUuid: null,
+        timestamp: "2026-04-21T00:00:00.000Z",
+        sessionId: "orig",
+        cwd: "/tmp",
+      },
+      {
+        type: "assistant",
+        parentUuid: "u0",
+        uuid: "u1",
+        timestamp: "2026-04-21T00:00:01.000Z",
+        sessionId: "orig",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: reasoningText },
+            { type: "text", text: "ok" },
+          ],
         },
-        {
-          type: "assistant",
-          parentUuid: "u0",
-          uuid: "u1",
-          timestamp: "2026-04-21T00:00:01.000Z",
-          sessionId: "orig",
-          message: {
-            role: "assistant",
-            content: [
-              { type: "thinking", thinking: reasoningText },
-              { type: "text", text: "ok" },
-            ],
-          },
-        },
-      ]
-        .map((obj) => JSON.stringify(obj))
-        .join("\n") + "\n";
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n")}\n`;
 
     const { jsonl: seed, sidecar } = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "fallback-target");
     const seedAssistantLines = seed
@@ -263,42 +260,41 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // accumulates across multiple cross-provider switches (which is what a
     // real user does over a long session).
     const claudeReasoningText = "Plan the next step.";
-    const initialClaudeJsonl =
-      [
-        {
-          type: "system",
-          subtype: "init",
-          uuid: "u0",
-          parentUuid: null,
-          timestamp: "2026-04-21T00:00:00.000Z",
-          sessionId: "orig",
-          cwd: "/tmp",
+    const initialClaudeJsonl = `${[
+      {
+        type: "system",
+        subtype: "init",
+        uuid: "u0",
+        parentUuid: null,
+        timestamp: "2026-04-21T00:00:00.000Z",
+        sessionId: "orig",
+        cwd: "/tmp",
+      },
+      {
+        type: "user",
+        parentUuid: "u0",
+        uuid: "u1",
+        timestamp: "2026-04-21T00:00:01.000Z",
+        sessionId: "orig",
+        message: { role: "user", content: [{ type: "text", text: "go" }] },
+      },
+      {
+        type: "assistant",
+        parentUuid: "u1",
+        uuid: "u2",
+        timestamp: "2026-04-21T00:00:02.000Z",
+        sessionId: "orig",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude" },
+            { type: "text", text: "ok" },
+          ],
         },
-        {
-          type: "user",
-          parentUuid: "u0",
-          uuid: "u1",
-          timestamp: "2026-04-21T00:00:01.000Z",
-          sessionId: "orig",
-          message: { role: "user", content: [{ type: "text", text: "go" }] },
-        },
-        {
-          type: "assistant",
-          parentUuid: "u1",
-          uuid: "u2",
-          timestamp: "2026-04-21T00:00:02.000Z",
-          sessionId: "orig",
-          message: {
-            role: "assistant",
-            content: [
-              { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude" },
-              { type: "text", text: "ok" },
-            ],
-          },
-        },
-      ]
-        .map((obj) => JSON.stringify(obj))
-        .join("\n") + "\n";
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n")}\n`;
 
     // Hop 1: claude → codex
     const canonical1 = importClaudeCodeJsonl(initialClaudeJsonl, emptySidecar());

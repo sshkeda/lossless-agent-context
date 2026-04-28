@@ -9,8 +9,8 @@ import {
   renderCanonicalEventLine,
 } from "./cross-provider";
 import { PI_SESSION_VERSION } from "./defaults";
-import { deterministicPiId, isoTimestampToEpochMs, stringifyToolOutput } from "./utils";
 import { normalizePiMcpToolName } from "./tool-projections";
+import { deterministicPiId, isoTimestampToEpochMs, stringifyToolOutput } from "./utils";
 
 type PiBlock = Record<string, unknown>;
 type StoredClaudeLineIds = Record<string, unknown> | undefined;
@@ -85,7 +85,7 @@ export function exportPiSessionJsonl(events: CanonicalEvent[]): string {
     const claudeIds = readStoredClaudeCodeIdsForGroup(group);
 
     if (first.kind === "session.created") {
-      if (emittedSession) return null;
+      if (emittedSession) return renderCanonicalEventLine(first, native);
       emittedSession = true;
       const line: Record<string, unknown> = {
         type: "session",

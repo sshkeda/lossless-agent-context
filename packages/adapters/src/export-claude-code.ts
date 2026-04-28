@@ -97,7 +97,7 @@ export function exportClaudeCodeJsonl(events: CanonicalEvent[]): string {
     const preserved = storedClaudeIdsForGroup(group);
 
     if (first.kind === "session.created") {
-      if (emittedInit) return null;
+      if (emittedInit) return renderCanonicalEventLine(first, native);
       emittedInit = true;
       const extVersion = first.extensions?.version;
       return emit({
@@ -247,11 +247,12 @@ function toolResultPartToClaudeBlock(part: unknown): unknown {
       return partToClaudeBlock({
         type: "image",
         imageRef: record.imageRef,
-        mediaType: typeof record.mediaType === "string"
-          ? record.mediaType
-          : typeof record.mimeType === "string"
-            ? record.mimeType
-            : undefined,
+        mediaType:
+          typeof record.mediaType === "string"
+            ? record.mediaType
+            : typeof record.mimeType === "string"
+              ? record.mimeType
+              : undefined,
       });
     }
 
@@ -260,11 +261,12 @@ function toolResultPartToClaudeBlock(part: unknown): unknown {
         type: "image",
         source: {
           type: "base64",
-          media_type: typeof record.mimeType === "string"
-            ? record.mimeType
-            : typeof record.mediaType === "string"
-              ? record.mediaType
-              : "image/png",
+          media_type:
+            typeof record.mimeType === "string"
+              ? record.mimeType
+              : typeof record.mediaType === "string"
+                ? record.mediaType
+                : "image/png",
           data: record.data,
         },
       };

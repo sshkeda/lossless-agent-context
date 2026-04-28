@@ -1,4 +1,5 @@
 import {
+  emptySidecar,
   exportClaudeCodeJsonl,
   exportCodexJsonl,
   exportPiSessionJsonl,
@@ -6,7 +7,6 @@ import {
   importCodexJsonl,
   importPiSessionJsonl,
   inspectShadowAlignmentStrategy,
-  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -30,7 +30,7 @@ const providers: Provider[] = [
   {
     name: "claude-code",
     fixtureFile: "claude-code.jsonl",
-    importToCanonical: importClaudeCodeJsonl,
+    importToCanonical: (input) => importClaudeCodeJsonl(input, emptySidecar()),
     exportFromCanonical: exportClaudeCodeJsonl,
   },
   {

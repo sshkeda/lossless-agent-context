@@ -17,5 +17,6 @@
   },
   "dependencies": {
     "@lossless-agent-context/core": "workspace:*"
-  }
+  },
+  "license": "MIT"
 }

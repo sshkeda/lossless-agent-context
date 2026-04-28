@@ -5,7 +5,7 @@ export { exportPiSessionJsonl } from "./export-pi";
 export { importClaudeCodeJsonl } from "./import-claude-code";
 export { importCodexJsonl } from "./import-codex";
 export { importPiSessionJsonl } from "./import-pi";
-export { prepareClaudeCodeResumeSeed, type PreparedClaudeCodeResume } from "./prepare-claude-code-resume";
+export { type PreparedClaudeCodeResume, prepareClaudeCodeResumeSeed } from "./prepare-claude-code-resume";
 export {
   type DemotedReasoningMarker,
   emptySidecar,

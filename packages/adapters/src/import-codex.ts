@@ -376,6 +376,7 @@ export function importCodexJsonl(text: string): CanonicalEvent[] {
         if (!item || typeof item.type !== "string") continue;
 
         if (item.type === "thread_name_updated") {
+          if (line.__lac_synthetic === "codex.thread_registration") continue;
           createEvent(events, {
             sessionId,
             branchId,

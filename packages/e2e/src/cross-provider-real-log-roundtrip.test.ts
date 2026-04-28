@@ -5,7 +5,7 @@ import {
   importPiSessionJsonl,
   prepareClaudeCodeResumeSeed,
 } from "@lossless-agent-context/adapters";
-import { type CanonicalEvent } from "@lossless-agent-context/core";
+import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
 import { detectRecentRealLogPaths, requireRealLogPaths } from "./runtime-detection";
 
@@ -20,13 +20,9 @@ import { detectRecentRealLogPaths, requireRealLogPaths } from "./runtime-detecti
 //     `function_call_output` and vice versa) — sanitization must not
 //     break pairing.
 //
-// Important: some older pi versions wrote sessions with a broken
-// pi-claude-code that may have inconsistent toolCallIds or other shape
-// quirks. Those would individually false-fail this test through no fault
-// of the current code. So per-session issues are collected and reported,
-// but the test only HARD-FAILS if a significant fraction of sessions
-// show the same problem (suggesting a real regression in our pipeline).
-// Investigate the listed session paths if findings show up.
+// This is part of the machine-local release gate, not portable CI. It is
+// intentionally strict: at least one recent cross-provider session must be
+// present, and any detected loss is a failure to investigate before release.
 
 requireRealLogPaths();
 
@@ -124,7 +120,10 @@ describe("cross-provider real-log round-trip", () => {
         text = readFileSync(path, "utf8");
         canonicalFromPi = importPiSessionJsonl(text);
       } catch (err) {
-        findings.push({ path, issue: `failed to import pi session: ${err instanceof Error ? err.message : String(err)}` });
+        findings.push({
+          path,
+          issue: `failed to import pi session: ${err instanceof Error ? err.message : String(err)}`,
+        });
         continue;
       }
 
@@ -176,33 +175,17 @@ describe("cross-provider real-log round-trip", () => {
       }
     }
 
-    // Always report what we found so the user can investigate. Some old pi
-    // sessions may have been written by buggy pi-claude-code versions and
-    // have inconsistent toolCallIds or other shape quirks — those will show
-    // up here as findings without indicating a current code regression.
     if (findings.length > 0) {
       console.warn(
-        `cross-provider round-trip findings (${findings.length} across ${crossProviderSessionsExamined} cross-provider sessions). ` +
-          `Investigate paths if a recent code change broke many at once; isolated entries are typically old buggy sessions:`,
+        `cross-provider round-trip findings (${findings.length} across ${crossProviderSessionsExamined} cross-provider sessions):`,
       );
       for (const f of findings) console.warn(`  - ${f.issue}: ${f.path}`);
     }
-    if (crossProviderSessionsExamined === 0) {
-      console.warn(
-        "WARNING: no cross-provider sessions found in the last 50 pi sessions. " +
-          "Run a session that uses both providers (codex + claude) to populate test coverage.",
-      );
-    }
 
-    // Hard-fail only if MORE THAN HALF of examined sessions showed
-    // findings — that would suggest a current pipeline regression rather
-    // than scattered old-data corruption. Single-digit findings across
-    // dozens of sessions are typically pre-existing.
-    if (crossProviderSessionsExamined > 0) {
-      expect(
-        findings.length,
-        `${findings.length} of ${crossProviderSessionsExamined} cross-provider sessions failed round-trip — likely a pipeline regression. See warnings above.`,
-      ).toBeLessThan(crossProviderSessionsExamined * 0.5);
-    }
+    expect(
+      crossProviderSessionsExamined,
+      "expected at least one recent pi session that used both codex and claude; run one before claiming the real-log gate passed",
+    ).toBeGreaterThan(0);
+    expect(findings, "cross-provider real-log round-trip findings must be fixed before release").toEqual([]);
   });
 });

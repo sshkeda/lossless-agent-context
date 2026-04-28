@@ -1,4 +1,5 @@
 import {
+  emptySidecar,
   exportClaudeCodeJsonl,
   exportCodexJsonl,
   exportPiSessionJsonl,
@@ -208,7 +209,11 @@ describe("export hardening", () => {
     )?.payload.parts;
 
     const scenarios = [
-      { name: "claude", exportText: exportClaudeCodeJsonl(events), reimport: importClaudeCodeJsonl },
+      {
+        name: "claude",
+        exportText: exportClaudeCodeJsonl(events),
+        reimport: (input: string) => importClaudeCodeJsonl(input, emptySidecar()),
+      },
       { name: "codex", exportText: exportCodexJsonl(events), reimport: importCodexJsonl },
     ] as const;
 

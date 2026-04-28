@@ -58,6 +58,7 @@ export function exportCodexJsonl(events: CanonicalEvent[]): string {
     emittedThreadRegistration = true;
     return {
       ...makeBase(timestamp, sidecar),
+      __lac_synthetic: "codex.thread_registration",
       type: "event_msg",
       payload: {
         type: "thread_name_updated",
@@ -71,7 +72,7 @@ export function exportCodexJsonl(events: CanonicalEvent[]): string {
     const ts = event.timestamp;
 
     if (event.kind === "session.created") {
-      if (emittedSession) return null;
+      if (emittedSession) return renderCanonicalEventLine(event, native);
       emittedSession = true;
       return {
         ...makeBase(ts, native),

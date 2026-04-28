@@ -136,6 +136,15 @@ export const codexWebSearchCallPayload = z
   })
   .catchall(z.unknown());
 
+export const codexImageGenerationCallPayload = z
+  .object({
+    type: z.literal("image_generation_call"),
+    status: z.enum(["generating", "in_progress", "completed", "incomplete", "failed"]).optional(),
+    id: z.string().optional(),
+    revised_prompt: z.string().optional(),
+  })
+  .catchall(z.unknown());
+
 export const codexResponseItemPayload = z.union([
   codexMessagePayload,
   codexReasoningPayload,
@@ -144,6 +153,7 @@ export const codexResponseItemPayload = z.union([
   codexFunctionCallOutputPayload,
   codexCustomToolCallOutputPayload,
   codexWebSearchCallPayload,
+  codexImageGenerationCallPayload,
 ]);
 
 export const codexAgentMessagePayload = z.object({

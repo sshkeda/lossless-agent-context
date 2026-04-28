@@ -1,4 +1,9 @@
-import { exportClaudeCodeJsonl, importClaudeCodeJsonl, importPiSessionJsonl , emptySidecar } from "@lossless-agent-context/adapters";
+import {
+  emptySidecar,
+  exportClaudeCodeJsonl,
+  importClaudeCodeJsonl,
+  importPiSessionJsonl,
+} from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
 import { stripPiClaudeBridgeToolCyclesForClaudeResume } from "./bridge-policy";

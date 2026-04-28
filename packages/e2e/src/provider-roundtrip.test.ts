@@ -1,4 +1,5 @@
 import {
+  emptySidecar,
   exportClaudeCodeJsonl,
   exportCodexJsonl,
   exportPiSessionJsonl,
@@ -28,7 +29,7 @@ const roundtripCases: RoundtripCase[] = [
   {
     name: "claude-code",
     fixtureFile: "claude-code.jsonl",
-    importToCanonical: importClaudeCodeJsonl,
+    importToCanonical: (input) => importClaudeCodeJsonl(input, emptySidecar()),
     exportFromCanonical: exportClaudeCodeJsonl,
   },
   {
@@ -40,6 +41,33 @@ const roundtripCases: RoundtripCase[] = [
 ];
 
 describe("provider-roundtrip e2e (native -> canonical -> native)", () => {
+  it("preserves duplicate native Pi lines as separate physical JSONL records", () => {
+    const session = JSON.stringify({
+      type: "session",
+      version: 3,
+      id: "dup-session",
+      timestamp: "2026-04-28T19:36:39.845Z",
+      cwd: "/tmp/example",
+    });
+    const sourceText = `${session}\n${session}\n${JSON.stringify({
+      type: "model_change",
+      id: "m1",
+      parentId: null,
+      timestamp: "2026-04-28T19:36:40.000Z",
+      provider: "openai-codex",
+      modelId: "gpt-5.5",
+    })}\n`;
+
+    expect(exportPiSessionJsonl(importPiSessionJsonl(sourceText))).toBe(sourceText);
+  });
+
+  it("preserves raw JSONL line whitespace and CRLF when replaying native-backed lines", () => {
+    const sourceText = `  {"timestamp":"2026-03-23T13:37:28.689Z","type":"session_meta","payload":{"id":"codex-session-1","timestamp":"2026-03-23T13:19:01.660Z","cwd":"/tmp/lossless-agent-context","model_provider":"openai"}}  \r\n\t{"timestamp":"2026-03-23T13:37:28.692Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"hello"}]}}\r\n`;
+    const exported = exportCodexJsonl(importCodexJsonl(sourceText));
+
+    expect(exported).toBe(sourceText);
+  });
+
   for (const testCase of roundtripCases) {
     it(`${testCase.name} JSONL roundtrips losslessly`, () => {
       const sourceText = readFixture(testCase.fixtureFile);

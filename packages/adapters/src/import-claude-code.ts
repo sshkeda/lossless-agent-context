@@ -8,12 +8,8 @@ import {
   readCanonicalOverrides,
 } from "./cross-provider";
 import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
-import {
-  emptySidecar,
-  type LosslessSidecar,
-  readDemotedReasoningByContentIndex,
-  readLineMetadata,
-} from "./recovery-sidecar";
+import { type LosslessSidecar, readDemotedReasoningByContentIndex, readLineMetadata } from "./recovery-sidecar";
+import { projectClaudeToolCallToPi } from "./tool-projections";
 import {
   createEvent,
   DEFAULT_BRANCH_ID,
@@ -25,7 +21,6 @@ import {
   withNativeRawRef,
   withSyntheticTimestampExtension,
 } from "./utils";
-import { projectClaudeToolCallToPi } from "./tool-projections";
 
 type Extensions = Record<string, unknown> | undefined;
 const TOOL_RESULT_DETAILS_KEY = "lossless-agent-context/toolResultDetails";
@@ -166,8 +161,7 @@ function normalizedEditToolResultDetailsFromClaudeLine(
   const blankLineNum = "".padStart(lineNumWidth, " ");
   const output: string[] = [];
 
-  for (let i = 0; i < hunks.length; i++) {
-    const hunk = hunks[i];
+  for (const [i, hunk] of hunks.entries()) {
     if (i > 0) output.push(` ${blankLineNum} ...`);
     let oldLine = hunk.oldStart ?? 1;
     let newLine = hunk.newStart ?? 1;
@@ -224,7 +218,7 @@ function toolResultDetailsFromClaudeRecord(
  * and silently degrades round-trip fidelity. See AGENTS.md ("mark, don't
  * infer").
  */
-export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar = emptySidecar()): CanonicalEvent[] {
+export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): CanonicalEvent[] {
   const entries = parseJsonlWithText(text);
   const lines = entries.map((entry) => entry.line);
   const events: CanonicalEvent[] = [];

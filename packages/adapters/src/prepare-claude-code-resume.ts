@@ -1,14 +1,61 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
+import { CANONICAL_OVERRIDE_FIELD, FOREIGN_FIELD } from "./cross-provider";
 import { exportClaudeCodeJsonl } from "./export-claude-code";
 import { emptySidecar, type LosslessSidecar, setDemotedReasoningMarkers, setLineMetadata } from "./recovery-sidecar";
-import { CANONICAL_OVERRIDE_FIELD, FOREIGN_FIELD } from "./cross-provider";
 import { deterministicUuid } from "./utils";
 
-// Types claude-code's resume loader accepts on its session file. Anything
-// else in the seed (e.g. "model_change" — valid in pi's format, rejected by
-// claude) is dropped.
-const CLAUDE_ACCEPTED_TYPES = new Set(["system", "user", "assistant", "summary", "attachment"]);
+// Claude Code is distributed here as a native/Bun executable, but the bundled
+// JavaScript is still inspectable. These resume-normalization rules are grounded
+// in Claude Code 2.1.121's embedded session persistence/resume code plus real
+// Claude/API validation behavior, then locked with e2e tests in
+// prepare-claude-code-resume.test.ts and claude-sdk-validation.test.ts. If Claude
+// Code changes its accepted JSONL shape, re-inspect the installed binary and
+// update these rules alongside a fixture/test demonstrating the new shape.
 
+// Types Claude Code 2.1.121 routes through its session persistence/resume layer.
+// Internal excerpt from the bundled JS (`KzK`):
+//   user/assistant/attachment/system/progress => "dedup-transcript"
+//   summary/custom-title/ai-title/last-prompt/tag/agent-name/agent-color/
+//   agent-setting/pr-link/frame-link/file-history-snapshot/attribution-snapshot/
+//   speculation-accept/mode/permission-mode/worktree-state/queue-operation/
+//   marble-origami-commit/marble-origami-snapshot => "always"
+//   content-replacement/fork-context-ref => "route-by-agent"
+// Keep every known-native type in resume seeds; dropping metadata loses native
+// context. Anything outside this set (e.g. lac/provider-specific event lines) is
+// still filtered from resume seeds only. Generic `exportClaudeCodeJsonl` remains
+// the raw lossless conversion path.
+const CLAUDE_ACCEPTED_TYPES = new Set([
+  "user",
+  "assistant",
+  "attachment",
+  "system",
+  "progress",
+  "summary",
+  "custom-title",
+  "ai-title",
+  "last-prompt",
+  "tag",
+  "agent-name",
+  "agent-color",
+  "agent-setting",
+  "pr-link",
+  "frame-link",
+  "file-history-snapshot",
+  "attribution-snapshot",
+  "speculation-accept",
+  "mode",
+  "permission-mode",
+  "worktree-state",
+  "queue-operation",
+  "marble-origami-commit",
+  "marble-origami-snapshot",
+  "content-replacement",
+  "fork-context-ref",
+]);
+
+// Claude rejects historical tool_result blocks carrying this legacy field when
+// they are replayed through resume. The original details remain recoverable via
+// sidecar/native metadata; the resume seed must not include the rejected field.
 function stripRejectedToolResultFields(value: unknown): void {
   if (!Array.isArray(value)) return;
   for (const block of value) {
@@ -20,7 +67,9 @@ function stripRejectedToolResultFields(value: unknown): void {
 }
 
 // Anthropic's API rejects tool_use.id (and the matching tool_result.tool_use_id)
-// when it contains characters outside `^[a-zA-Z0-9_-]+$`. This bites cross-
+// when it contains characters outside `^[a-zA-Z0-9_-]+$`. This comes from the
+// API validation error observed when resuming converted Codex sessions and is
+// covered by resume-seed tests. This bites cross-
 // provider seeds: openai-codex toolCallIds are stored as `call_<id>|fc_<id>`
 // because Responses-API replay needs both, and the `|` makes claude reject the
 // resume with `messages.N.content.M.tool_use.id: String should match pattern
@@ -248,10 +297,11 @@ export function prepareClaudeCodeResumeSeed(
 
     if (typeof obj.uuid === "string") {
       const foreign = obj[FOREIGN_FIELD];
-      const canonicalOverrides = Array.isArray(obj[CANONICAL_OVERRIDE_FIELD])
-        ? obj[CANONICAL_OVERRIDE_FIELD]
-        : undefined;
-      setLineMetadata(sidecar, obj.uuid, { foreign, canonicalOverrides });
+      const canonicalOverrides = obj[CANONICAL_OVERRIDE_FIELD];
+      setLineMetadata(sidecar, obj.uuid, {
+        foreign,
+        ...(Array.isArray(canonicalOverrides) ? { canonicalOverrides } : {}),
+      });
       delete obj[FOREIGN_FIELD];
       delete obj[CANONICAL_OVERRIDE_FIELD];
     }
