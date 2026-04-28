@@ -21,6 +21,17 @@ import { projectClaudeToolCallToPi } from "./tool-projections";
 
 type Extensions = Record<string, unknown> | undefined;
 const TOOL_RESULT_DETAILS_KEY = "lossless-agent-context/toolResultDetails";
+
+// Pattern for the cross-provider thinking demotion done by
+// prepareClaudeCodeResumeSeed. Anchored on both ends so a text block that
+// merely *mentions* `<thinking>` is left alone — only an exact-shape wrapped
+// block is recovered. Capture group 1 holds the original reasoning text.
+const DEMOTED_THINKING_PATTERN = /^<thinking>\n([\s\S]*?)\n<\/thinking>$/;
+
+function extractDemotedThinkingText(text: string): string | undefined {
+  const match = DEMOTED_THINKING_PATTERN.exec(text);
+  return match ? match[1] : undefined;
+}
 type ResolvedClaudeLineTimestamp = {
   synthetic: boolean;
   value: string;
@@ -427,6 +438,34 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
             }
 
             if (record.type === "text" && typeof record.text === "string") {
+              // Recovery for the cross-provider thinking demotion: a previous
+              // pass through prepareClaudeCodeResumeSeed wrapped foreign
+              // (unsigned) thinking blocks in `<thinking>...</thinking>` text
+              // so claude could resume. Re-promote any text block whose
+              // entire content matches that exact shape back to a native
+              // `reasoning.created` event so a subsequent codex export emits
+              // a proper `reasoning` response item rather than leaking the
+              // tags as plain text. The pattern is anchored — a text block
+              // that merely *mentions* `<thinking>` is left alone.
+              const demotedReasoning = extractDemotedThinkingText(record.text);
+              if (demotedReasoning !== undefined) {
+                createEvent(events, {
+                  sessionId,
+                  branchId,
+                  timestamp: lineTimestamp,
+                  kind: "reasoning.created",
+                  actor: { type: "assistant" },
+                  payload: {
+                    visibility: "summary",
+                    text: demotedReasoning,
+                    providerExposed: true,
+                  },
+                  cache,
+                  extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
+                  native: native(`assistant.content[${partIndex}].text.demoted_thinking`),
+                });
+                continue;
+              }
               createEvent(events, {
                 sessionId,
                 branchId,
