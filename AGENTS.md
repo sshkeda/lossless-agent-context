@@ -1,5 +1,20 @@
 # AGENTS.md
 
+## DO NOT modify AGENTS.md without explicit user permission
+
+When you (the AI agent) want to add, change, or remove anything in this
+file, **propose the change to the user first** (paste the proposed diff
+or a clear description) and wait for explicit approval before writing
+it. AGENTS.md is the user's contract with future agents — they get to
+decide what's in it. Drive-by AGENTS.md updates as part of unrelated
+work are not allowed; surface the suggestion, let the user say yes,
+then make the change.
+
+This rule applies even when the AI agent thinks the update is obviously
+correct or trivial. Suggestions are welcome; commits are not.
+
+---
+
 - Assume `pi`, `claude`, and `codex` CLIs are installed and authenticated.
 - Tests must fail if any required CLI or auth prerequisite is missing; do not skip those tests because prerequisites are absent.
 - When changing code in this repo, run the fullest machine-local verification gate that the repo defines when feasible, not just the portable/default suite.
