@@ -36,26 +36,42 @@ import { describe, expect, it } from "vitest";
 describe("symmetric claude → codex → claude thinking round-trip", () => {
   it("preserves claude signed thinking text content across the codex hop", () => {
     const claudeReasoningText = "Let me think about this carefully — the user wants X, so I should do Y.";
-    const claudeJsonl = [
-      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
-      { type: "user", parentUuid: "u0", uuid: "u1", timestamp: "2026-04-21T00:00:01.000Z", sessionId: "orig", message: { role: "user", content: [{ type: "text", text: "do the thing" }] } },
-      {
-        type: "assistant",
-        parentUuid: "u1",
-        uuid: "u2",
-        timestamp: "2026-04-21T00:00:02.000Z",
-        sessionId: "orig",
-        message: {
-          role: "assistant",
-          content: [
-            { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude-hmac" },
-            { type: "text", text: "Here's the answer." },
-          ],
+    const claudeJsonl =
+      [
+        {
+          type: "system",
+          subtype: "init",
+          uuid: "u0",
+          parentUuid: null,
+          timestamp: "2026-04-21T00:00:00.000Z",
+          sessionId: "orig",
+          cwd: "/tmp",
         },
-      },
-    ]
-      .map((obj) => JSON.stringify(obj))
-      .join("\n") + "\n";
+        {
+          type: "user",
+          parentUuid: "u0",
+          uuid: "u1",
+          timestamp: "2026-04-21T00:00:01.000Z",
+          sessionId: "orig",
+          message: { role: "user", content: [{ type: "text", text: "do the thing" }] },
+        },
+        {
+          type: "assistant",
+          parentUuid: "u1",
+          uuid: "u2",
+          timestamp: "2026-04-21T00:00:02.000Z",
+          sessionId: "orig",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude-hmac" },
+              { type: "text", text: "Here's the answer." },
+            ],
+          },
+        },
+      ]
+        .map((obj) => JSON.stringify(obj))
+        .join("\n") + "\n";
 
     // Step 1: claude session → canonical
     const canonicalFromClaude = importClaudeCodeJsonl(claudeJsonl, emptySidecar());
@@ -106,7 +122,11 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
       const content = obj.message?.content;
       if (!Array.isArray(content)) continue;
       for (const [contentIndex, block] of content.entries()) {
-        if (block?.type === "thinking" && typeof block.thinking === "string" && block.thinking.includes(claudeReasoningText)) {
+        if (
+          block?.type === "thinking" &&
+          typeof block.thinking === "string" &&
+          block.thinking.includes(claudeReasoningText)
+        ) {
           nativeThinking = { signature: block.signature, thinking: block.thinking };
         }
         if (block?.type === "text" && typeof block.text === "string" && block.text.includes(claudeReasoningText)) {
@@ -144,7 +164,10 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // round-trip (regression check: we don't fold assistant text into the
     // reasoning by accident, and we don't drop it).
     const allAssistantText = canonicalFromSeed
-      .filter((e): e is Extract<typeof e, { kind: "message.created" }> => e.kind === "message.created" && e.payload.role === "assistant")
+      .filter(
+        (e): e is Extract<typeof e, { kind: "message.created" }> =>
+          e.kind === "message.created" && e.payload.role === "assistant",
+      )
       .flatMap((e) => e.payload.parts)
       .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
       .map((p) => p.text);
@@ -157,29 +180,38 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // future codex round-trip would produce if lac stopped preserving the
     // signature, OR what an in-the-wild jsonl from a non-lac source might
     // already contain). The seed prep MUST take the demote path, AND that
-    // path MUST be deterministic — text wrapped in `<thinking>` tags AND
+    // path MUST be deterministic — visible historical `<reasoning>` text AND
     // a recovery marker on the wrapper so a future re-export deterministically
     // reproduces the reasoning event.
     const reasoningText = "Pretend the signature is missing.";
-    const malformedClaudeJsonl = [
-      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
-      {
-        type: "assistant",
-        parentUuid: "u0",
-        uuid: "u1",
-        timestamp: "2026-04-21T00:00:01.000Z",
-        sessionId: "orig",
-        message: {
-          role: "assistant",
-          content: [
-            { type: "thinking", thinking: reasoningText },
-            { type: "text", text: "ok" },
-          ],
+    const malformedClaudeJsonl =
+      [
+        {
+          type: "system",
+          subtype: "init",
+          uuid: "u0",
+          parentUuid: null,
+          timestamp: "2026-04-21T00:00:00.000Z",
+          sessionId: "orig",
+          cwd: "/tmp",
         },
-      },
-    ]
-      .map((obj) => JSON.stringify(obj))
-      .join("\n") + "\n";
+        {
+          type: "assistant",
+          parentUuid: "u0",
+          uuid: "u1",
+          timestamp: "2026-04-21T00:00:01.000Z",
+          sessionId: "orig",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: reasoningText },
+              { type: "text", text: "ok" },
+            ],
+          },
+        },
+      ]
+        .map((obj) => JSON.stringify(obj))
+        .join("\n") + "\n";
 
     const { jsonl: seed, sidecar } = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "fallback-target");
     const seedAssistantLines = seed
@@ -194,10 +226,13 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // No native thinking blocks survive (claude API would reject unsigned).
     expect(content.some((b: { type?: string }) => b?.type === "thinking")).toBe(false);
 
-    // A `<thinking>`-wrapped text block at a known content index:
+    // A historical reasoning text block at a known content index:
     const thinkingTextBlocks = content.filter(
       (b: { type?: string; text?: string }) =>
-        b?.type === "text" && typeof b.text === "string" && b.text === `<thinking>\n${reasoningText}\n</thinking>`,
+        b?.type === "text" &&
+        typeof b.text === "string" &&
+        b.text ===
+          `<reasoning>\nHistorical assistant reasoning for continuity. Verify current state with tools.\n\n> ${reasoningText}\n</reasoning>`,
     );
     expect(thinkingTextBlocks).toHaveLength(1);
 
@@ -213,6 +248,7 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     expect(sidecar.byLineUuid[lineUuid]?.demotedReasoning?.[0]).toEqual({
       contentIndex: 0,
       originalText: reasoningText,
+      wrapper: "reasoning.v1",
     });
 
     // Re-import must restore the reasoning event using the sidecar marker.
@@ -227,23 +263,42 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // accumulates across multiple cross-provider switches (which is what a
     // real user does over a long session).
     const claudeReasoningText = "Plan the next step.";
-    const initialClaudeJsonl = [
-      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
-      { type: "user", parentUuid: "u0", uuid: "u1", timestamp: "2026-04-21T00:00:01.000Z", sessionId: "orig", message: { role: "user", content: [{ type: "text", text: "go" }] } },
-      {
-        type: "assistant",
-        parentUuid: "u1",
-        uuid: "u2",
-        timestamp: "2026-04-21T00:00:02.000Z",
-        sessionId: "orig",
-        message: { role: "assistant", content: [
-          { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude" },
-          { type: "text", text: "ok" },
-        ] },
-      },
-    ]
-      .map((obj) => JSON.stringify(obj))
-      .join("\n") + "\n";
+    const initialClaudeJsonl =
+      [
+        {
+          type: "system",
+          subtype: "init",
+          uuid: "u0",
+          parentUuid: null,
+          timestamp: "2026-04-21T00:00:00.000Z",
+          sessionId: "orig",
+          cwd: "/tmp",
+        },
+        {
+          type: "user",
+          parentUuid: "u0",
+          uuid: "u1",
+          timestamp: "2026-04-21T00:00:01.000Z",
+          sessionId: "orig",
+          message: { role: "user", content: [{ type: "text", text: "go" }] },
+        },
+        {
+          type: "assistant",
+          parentUuid: "u1",
+          uuid: "u2",
+          timestamp: "2026-04-21T00:00:02.000Z",
+          sessionId: "orig",
+          message: {
+            role: "assistant",
+            content: [
+              { type: "thinking", thinking: claudeReasoningText, signature: "sig-valid-claude" },
+              { type: "text", text: "ok" },
+            ],
+          },
+        },
+      ]
+        .map((obj) => JSON.stringify(obj))
+        .join("\n") + "\n";
 
     // Hop 1: claude → codex
     const canonical1 = importClaudeCodeJsonl(initialClaudeJsonl, emptySidecar());
@@ -263,7 +318,7 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // thinking (signature preserved through every codex hop via lac
     // extensions). It must NEVER fall back to the demote-to-text path
     // here — these fixtures all start with a valid signature, so any
-    // appearance of `<thinking>`-wrapped text would mean lac dropped the
+    // appearance of historical reasoning wrapper text would mean lac dropped the
     // signature somewhere in the chain.
     let nativeThinkingFound = false;
     let demotedTextFound = false;
@@ -272,9 +327,16 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
       if (obj.type !== "assistant") continue;
       const content = obj.message?.content ?? [];
       for (const block of content) {
-        if (block?.type === "thinking" && typeof block.thinking === "string" && block.thinking.includes(claudeReasoningText)) {
+        if (
+          block?.type === "thinking" &&
+          typeof block.thinking === "string" &&
+          block.thinking.includes(claudeReasoningText)
+        ) {
           nativeThinkingFound = true;
-          expect(typeof block.signature === "string" && (block.signature as string).length > 0, "thinking block must carry a signature").toBe(true);
+          expect(
+            typeof block.signature === "string" && (block.signature as string).length > 0,
+            "thinking block must carry a signature",
+          ).toBe(true);
         }
         if (block?.type === "text" && typeof block.text === "string" && block.text.includes(claudeReasoningText)) {
           demotedTextFound = true;

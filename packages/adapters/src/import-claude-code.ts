@@ -1,12 +1,19 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import {
   applyCanonicalOverridesToRange,
+  CANONICAL_OVERRIDE_FIELD,
+  FOREIGN_FIELD,
   importEmbeddedCrossProviderLine,
   isForeignLine,
   readCanonicalOverrides,
 } from "./cross-provider";
 import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
-import { type LosslessSidecar, readDemotedReasoningByContentIndex } from "./recovery-sidecar";
+import {
+  emptySidecar,
+  type LosslessSidecar,
+  readDemotedReasoningByContentIndex,
+  readLineMetadata,
+} from "./recovery-sidecar";
 import {
   createEvent,
   DEFAULT_BRANCH_ID,
@@ -127,7 +134,9 @@ type ClaudeStructuredPatchHunk = {
   lines?: unknown;
 };
 
-function normalizedEditToolResultDetailsFromClaudeLine(line: Record<string, unknown>): Record<string, unknown> | undefined {
+function normalizedEditToolResultDetailsFromClaudeLine(
+  line: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   const toolUseResult = line.toolUseResult;
   if (!toolUseResult || typeof toolUseResult !== "object" || Array.isArray(toolUseResult)) return undefined;
   const record = toolUseResult as Record<string, unknown>;
@@ -147,12 +156,10 @@ function normalizedEditToolResultDetailsFromClaudeLine(line: Record<string, unkn
   if (hunks.length === 0) return undefined;
 
   const maxLine = hunks.reduce((max, hunk) => {
-    const oldEnd = typeof hunk.oldStart === "number" && typeof hunk.oldLines === "number"
-      ? hunk.oldStart + hunk.oldLines - 1
-      : 0;
-    const newEnd = typeof hunk.newStart === "number" && typeof hunk.newLines === "number"
-      ? hunk.newStart + hunk.newLines - 1
-      : 0;
+    const oldEnd =
+      typeof hunk.oldStart === "number" && typeof hunk.oldLines === "number" ? hunk.oldStart + hunk.oldLines - 1 : 0;
+    const newEnd =
+      typeof hunk.newStart === "number" && typeof hunk.newLines === "number" ? hunk.newStart + hunk.newLines - 1 : 0;
     return Math.max(max, oldEnd, newEnd);
   }, 0);
   const lineNumWidth = String(Math.max(maxLine, 1)).length;
@@ -217,7 +224,7 @@ function toolResultDetailsFromClaudeRecord(
  * and silently degrades round-trip fidelity. See AGENTS.md ("mark, don't
  * infer").
  */
-export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): CanonicalEvent[] {
+export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar = emptySidecar()): CanonicalEvent[] {
   const entries = parseJsonlWithText(text);
   const lines = entries.map((entry) => entry.line);
   const events: CanonicalEvent[] = [];
@@ -259,7 +266,12 @@ export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): C
   }
 
   for (const entry of entries) {
-    const { line, text: lineText } = entry;
+    const { line: parsedLine, text: lineText } = entry;
+    const lineMetadata = readLineMetadata(sidecar, typeof parsedLine.uuid === "string" ? parsedLine.uuid : undefined);
+    const line = { ...parsedLine };
+    if (lineMetadata?.foreign !== undefined) line[FOREIGN_FIELD] = lineMetadata.foreign;
+    if (lineMetadata?.canonicalOverrides !== undefined)
+      line[CANONICAL_OVERRIDE_FIELD] = lineMetadata.canonicalOverrides;
     if (typeof line.sessionId === "string") currentSessionId = line.sessionId;
     const sessionId = currentSessionId;
     const branchId = DEFAULT_BRANCH_ID;

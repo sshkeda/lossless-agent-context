@@ -1,10 +1,7 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { exportClaudeCodeJsonl } from "./export-claude-code";
-import {
-  emptySidecar,
-  type LosslessSidecar,
-  setDemotedReasoningMarkers,
-} from "./recovery-sidecar";
+import { emptySidecar, type LosslessSidecar, setDemotedReasoningMarkers, setLineMetadata } from "./recovery-sidecar";
+import { CANONICAL_OVERRIDE_FIELD, FOREIGN_FIELD } from "./cross-provider";
 import { deterministicUuid } from "./utils";
 
 // Types claude-code's resume loader accepts on its session file. Anything
@@ -47,11 +44,10 @@ function sanitizeClaudeToolUseId(id: string): string {
 // extended-thinking pipeline).
 //
 // The next-best option is to demote the unsigned thinking block into a plain
-// text block wrapped in `<thinking>` tags. Claude reads this as part of the
-// historical assistant turn — not as its own internal reasoning — so the
-// chain-of-thought survives the resume and informs the next turn. The wrapper
-// tags are a convention claude is trained on, so it interprets the block as
-// prior reasoning rather than something the assistant said out loud.
+// text block wrapped as historical cross-provider reasoning. Claude reads this
+// as part of the historical assistant turn — not as signed native reasoning —
+// so the reasoning survives the resume and informs the next turn without using
+// the overloaded `<thinking>` tag.
 //
 // Empty/whitespace-only thinking blocks (codex reasoning items whose
 // `summary[]` was empty) are dropped because there's no recoverable text —
@@ -65,9 +61,31 @@ function sanitizeClaudeToolUseId(id: string): string {
 type DemotedThinkingMarker = {
   contentIndex: number;
   originalText: string;
+  sourceProvider?: string;
+  wrapper: "reasoning.v1";
 };
 
-function demoteUnsignedThinkingBlocks(content: unknown[]): {
+function escapeReasoningAttribute(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function quoteHistoricalReasoning(text: string): string {
+  return text
+    .replace(/<\/reasoning>/gi, "<\\/reasoning>")
+    .split("\n")
+    .map((line) => `> ${line}`)
+    .join("\n");
+}
+
+function historicalReasoningWrapper(text: string, sourceProvider: string | undefined): string {
+  const source = sourceProvider ? ` source="${escapeReasoningAttribute(sourceProvider)}"` : "";
+  return `<reasoning${source}>\nHistorical assistant reasoning for continuity. Verify current state with tools.\n\n${quoteHistoricalReasoning(text)}\n</reasoning>`;
+}
+
+function demoteUnsignedThinkingBlocks(
+  content: unknown[],
+  sourceProvider: string | undefined,
+): {
   content: unknown[];
   demoted: DemotedThinkingMarker[];
 } {
@@ -90,8 +108,13 @@ function demoteUnsignedThinkingBlocks(content: unknown[]): {
     const text = typeof record.thinking === "string" ? record.thinking : "";
     if (text.trim().length === 0) continue;
     const contentIndex = transformed.length;
-    transformed.push({ type: "text", text: `<thinking>\n${text}\n</thinking>` });
-    demoted.push({ contentIndex, originalText: text });
+    transformed.push({ type: "text", text: historicalReasoningWrapper(text, sourceProvider) });
+    demoted.push({
+      contentIndex,
+      originalText: text,
+      ...(sourceProvider ? { sourceProvider } : {}),
+      wrapper: "reasoning.v1",
+    });
   }
   return { content: transformed, demoted };
 }
@@ -128,6 +151,28 @@ function ensureAssistantMessageId(line: Record<string, unknown>, lineIndex: numb
   messageRecord.id = synthesizeClaudeMessageId(line, lineIndex);
 }
 
+function sourceProviderFromLine(line: Record<string, unknown>): string | undefined {
+  const foreign = line[FOREIGN_FIELD];
+  if (foreign && typeof foreign === "object" && !Array.isArray(foreign)) {
+    const raw = (foreign as Record<string, unknown>).raw;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const message = (raw as Record<string, unknown>).message;
+      if (message && typeof message === "object" && !Array.isArray(message)) {
+        const provider = (message as Record<string, unknown>).provider;
+        if (typeof provider === "string" && provider.length > 0) return provider;
+      }
+      const payload = (raw as Record<string, unknown>).payload;
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        const provider = (payload as Record<string, unknown>).provider;
+        if (typeof provider === "string" && provider.length > 0) return provider;
+      }
+    }
+    const source = (foreign as Record<string, unknown>).source;
+    if (typeof source === "string" && source.length > 0) return source;
+  }
+  return undefined;
+}
+
 export interface PreparedClaudeCodeResume {
   /**
    * The pure claude-code JSONL seed — write this to
@@ -140,8 +185,8 @@ export interface PreparedClaudeCodeResume {
    * Recovery sidecar — write to the canonical sidecar path (see
    * `sidecarPathForSeedPath` in recovery-sidecar.ts) so that a future
    * `importClaudeCodeJsonl(text, { sidecar })` can deterministically
-   * restore one-way transforms (e.g. `<thinking>`-text demotions back to
-   * native `reasoning.created` events). Empty-ish sidecars (no markers
+   * restore one-way transforms (e.g. historical reasoning text demotions back
+   * to native `reasoning.created` events). Empty-ish sidecars (no markers
    * for any line) are still safe to write — the importer treats them as
    * "no recovery info available, fall through".
    */
@@ -165,8 +210,8 @@ export interface PreparedClaudeCodeResume {
  * 2. **type filter**: lines with types outside CLAUDE_ACCEPTED_TYPES are
  *    dropped (claude-code rejects unknown types).
  * 3. **thinking-signature guard**: assistant thinking blocks without a
- *    valid claude signature are demoted to `<thinking>`-wrapped text and
- *    recorded in the sidecar for deterministic restoration.
+ *    valid claude signature are demoted to visible historical `<reasoning>`
+ *    text and recorded in the sidecar for deterministic restoration.
  * 4. **tool_result legacy field strip**: `structuredContent` (a removed
  *    field) is stripped to avoid claude API rejection.
  * 5. **tool id sanitization**: `tool_use.id` and `tool_result.tool_use_id`
@@ -180,7 +225,10 @@ export interface PreparedClaudeCodeResume {
  */
 export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[], sessionId: string): PreparedClaudeCodeResume;
 export function prepareClaudeCodeResumeSeed(input: string, sessionId: string): PreparedClaudeCodeResume;
-export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, sessionId: string): PreparedClaudeCodeResume {
+export function prepareClaudeCodeResumeSeed(
+  input: CanonicalEvent[] | string,
+  sessionId: string,
+): PreparedClaudeCodeResume {
   const jsonl = typeof input === "string" ? input : exportClaudeCodeJsonl(input);
   const lines = jsonl.split("\n").filter((line) => line.trim().length > 0);
   const kept: Record<string, unknown>[] = [];
@@ -196,6 +244,17 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
     }
     const type = obj.type;
     if (typeof type !== "string" || !CLAUDE_ACCEPTED_TYPES.has(type)) continue;
+    const sourceProvider = sourceProviderFromLine(obj);
+
+    if (typeof obj.uuid === "string") {
+      const foreign = obj[FOREIGN_FIELD];
+      const canonicalOverrides = Array.isArray(obj[CANONICAL_OVERRIDE_FIELD])
+        ? obj[CANONICAL_OVERRIDE_FIELD]
+        : undefined;
+      setLineMetadata(sidecar, obj.uuid, { foreign, canonicalOverrides });
+      delete obj[FOREIGN_FIELD];
+      delete obj[CANONICAL_OVERRIDE_FIELD];
+    }
 
     if (type === "assistant") {
       const message = obj.message;
@@ -203,7 +262,7 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
         const messageRecord = message as Record<string, unknown>;
         const content = messageRecord.content;
         if (Array.isArray(content)) {
-          const { content: transformed, demoted } = demoteUnsignedThinkingBlocks(content);
+          const { content: transformed, demoted } = demoteUnsignedThinkingBlocks(content, sourceProvider);
           if (transformed.length === 0) continue;
           messageRecord.content = transformed;
           sanitizeClaudeToolUseIds(transformed);

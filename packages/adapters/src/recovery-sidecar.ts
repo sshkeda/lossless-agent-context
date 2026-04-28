@@ -41,6 +41,8 @@ import { LOSSLESS_SIDECAR_FILE_SUFFIX } from "./defaults";
 export interface DemotedReasoningMarker {
   contentIndex: number;
   originalText: string;
+  sourceProvider?: string;
+  wrapper?: "reasoning.v1";
 }
 
 /**
@@ -51,6 +53,8 @@ export interface DemotedReasoningMarker {
  */
 export interface LosslessSidecarEntry {
   demotedReasoning?: DemotedReasoningMarker[];
+  foreign?: unknown;
+  canonicalOverrides?: unknown[];
 }
 
 /**
@@ -119,11 +123,18 @@ export function parseSidecar(text: string | undefined): LosslessSidecar {
         if (!m || typeof m !== "object" || Array.isArray(m)) continue;
         const mr = m as Record<string, unknown>;
         if (typeof mr.contentIndex === "number" && typeof mr.originalText === "string") {
-          markers.push({ contentIndex: mr.contentIndex, originalText: mr.originalText });
+          markers.push({
+            contentIndex: mr.contentIndex,
+            originalText: mr.originalText,
+            ...(typeof mr.sourceProvider === "string" ? { sourceProvider: mr.sourceProvider } : {}),
+            ...(mr.wrapper === "reasoning.v1" ? { wrapper: "reasoning.v1" as const } : {}),
+          });
         }
       }
       if (markers.length > 0) entry.demotedReasoning = markers;
     }
+    if ("foreign" in record) entry.foreign = record.foreign;
+    if (Array.isArray(record.canonicalOverrides)) entry.canonicalOverrides = record.canonicalOverrides;
     if (Object.keys(entry).length > 0) validated[uuid] = entry;
   }
   return { byLineUuid: validated };
@@ -150,6 +161,32 @@ export function setDemotedReasoningMarkers(
  * O(1) lookups during the per-block import walk. Returns an empty Map if
  * the line has no markers — caller falls through to default handling.
  */
+export function setLineMetadata(
+  sidecar: LosslessSidecar,
+  lineUuid: string,
+  metadata: { foreign?: unknown; canonicalOverrides?: unknown[] },
+): void {
+  const next: LosslessSidecarEntry = { ...(sidecar.byLineUuid[lineUuid] ?? {}) };
+  if (metadata.foreign !== undefined) next.foreign = metadata.foreign;
+  if (metadata.canonicalOverrides !== undefined && metadata.canonicalOverrides.length > 0) {
+    next.canonicalOverrides = metadata.canonicalOverrides;
+  }
+  if (Object.keys(next).length > 0) sidecar.byLineUuid[lineUuid] = next;
+}
+
+export function readLineMetadata(
+  sidecar: LosslessSidecar | undefined,
+  lineUuid: string | undefined,
+): { foreign?: unknown; canonicalOverrides?: unknown[] } | undefined {
+  if (!sidecar || !lineUuid) return undefined;
+  const entry = sidecar.byLineUuid[lineUuid];
+  if (!entry) return undefined;
+  const metadata: { foreign?: unknown; canonicalOverrides?: unknown[] } = {};
+  if (entry.foreign !== undefined) metadata.foreign = entry.foreign;
+  if (entry.canonicalOverrides !== undefined) metadata.canonicalOverrides = entry.canonicalOverrides;
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
 export function readDemotedReasoningByContentIndex(
   sidecar: LosslessSidecar | undefined,
   lineUuid: string | undefined,

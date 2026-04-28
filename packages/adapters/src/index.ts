@@ -13,7 +13,9 @@ export {
   type LosslessSidecar,
   type LosslessSidecarEntry,
   parseSidecar,
+  readLineMetadata,
   serializeSidecar,
+  setLineMetadata,
   sidecarPathForSeedPath,
 } from "./recovery-sidecar";
 export { normalizePiMcpToolName, projectClaudeToolCallToPi, projectToolCallToClaude } from "./tool-projections";
