@@ -15,6 +15,18 @@ import { normalizePiMcpToolName } from "./tool-projections";
 type PiBlock = Record<string, unknown>;
 type StoredClaudeLineIds = Record<string, unknown> | undefined;
 
+const PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY = "pi-claude-code/toolProvenance";
+
+function toolProvenanceDetailsForGroup(group: CanonicalEvent[]): Record<string, unknown> | undefined {
+  const byId: Record<string, unknown> = {};
+  for (const event of group) {
+    if (event.kind !== "tool.call") continue;
+    const provenance = event.extensions?.[PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY];
+    if (provenance !== undefined) byId[event.payload.toolCallId] = provenance;
+  }
+  return Object.keys(byId).length > 0 ? { [PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY]: byId } : undefined;
+}
+
 export function exportPiSessionJsonl(events: CanonicalEvent[]): string {
   const sessionId = inferSessionIdForTarget(events, "pi");
   const cwd = inferWorkingDirectory(events);
@@ -177,16 +189,19 @@ export function exportPiSessionJsonl(events: CanonicalEvent[]): string {
     }
 
     if (assistantBlocks.length > 0) {
+      const message: Record<string, unknown> = {
+        role: "assistant",
+        content: assistantBlocks,
+        usage: assistantUsageForGroup(group),
+        timestamp: ms,
+      };
+      const details = toolProvenanceDetailsForGroup(group);
+      if (details) message.details = details;
       return attachTargetIds(
         emit({
           type: "message",
           ...makeBase(ts, native),
-          message: {
-            role: "assistant",
-            content: assistantBlocks,
-            usage: assistantUsageForGroup(group),
-            timestamp: ms,
-          },
+          message,
         }),
         claudeIds,
       );

@@ -22,6 +22,7 @@ type ReverseToolProjectionRule = {
 
 export const PI_MCP_PROXY_PREFIX = "pi_mcp_proxy__";
 const CLAUDE_PI_MCP_PREFIX = "mcp__pi-tools__";
+const PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY = "pi-claude-code/toolProvenance";
 
 export function normalizePiMcpToolName(name: string): string {
   if (name.startsWith(PI_MCP_PROXY_PREFIX)) return name.slice(PI_MCP_PROXY_PREFIX.length);
@@ -70,6 +71,22 @@ function projectBashCommand(args: JsonRecord | undefined, commandKey: string): J
   const command = readString(args, commandKey);
   if (!command) return undefined;
   return withDefinedFields({ command }, [["description", readString(args, "description")]]);
+}
+
+function readClaudeCodeTimeoutMsProvenance(event: Extract<CanonicalEvent, { kind: "tool.call" }>): number | undefined {
+  const provenance = event.extensions?.[PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY];
+  if (!provenance || typeof provenance !== "object" || Array.isArray(provenance)) return undefined;
+  const record = provenance as Record<string, unknown>;
+  if (record.sourceExecutor !== "claude-code" || record.sourceToolName !== "Bash") return undefined;
+  const semantics = record.argumentSemantics;
+  if (!semantics || typeof semantics !== "object" || Array.isArray(semantics)) return undefined;
+  const timeout = (semantics as Record<string, unknown>).timeout;
+  if (!timeout || typeof timeout !== "object" || Array.isArray(timeout)) return undefined;
+  const timeoutRecord = timeout as Record<string, unknown>;
+  if (timeoutRecord.unit !== "ms") return undefined;
+  return typeof timeoutRecord.value === "number" && Number.isFinite(timeoutRecord.value) && timeoutRecord.value > 0
+    ? timeoutRecord.value
+    : undefined;
 }
 
 function projectWrite(args: JsonRecord | undefined): JsonRecord | undefined {
@@ -270,6 +287,12 @@ export function projectToolCallToClaude(
   const args = asRecord(event.payload.arguments);
   const input = rule.buildInput(args, event.payload.arguments);
   if (input === undefined) return null;
+  if (name === "bash" && rule.targetName === "Bash" && input && typeof input === "object" && !Array.isArray(input)) {
+    const timeoutMs = readClaudeCodeTimeoutMsProvenance(event);
+    if (timeoutMs !== undefined) {
+      return { name: rule.targetName, input: { ...(input as JsonRecord), timeout: timeoutMs } };
+    }
+  }
   return { name: rule.targetName, input };
 }
 

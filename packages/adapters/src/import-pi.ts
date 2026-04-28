@@ -19,8 +19,40 @@ import { normalizePiMcpToolName } from "./tool-projections";
 
 type Extensions = Record<string, unknown> | undefined;
 
+const PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY = "pi-claude-code/toolProvenance";
+
 function lineExtensions(line: Record<string, unknown>): Extensions {
   return claudeCodeTargetIdExtensions(line);
+}
+
+function readMessageDetails(message: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  const details = message?.details;
+  return details && typeof details === "object" && !Array.isArray(details)
+    ? (details as Record<string, unknown>)
+    : undefined;
+}
+
+function readToolProvenanceForCall(
+  message: Record<string, unknown> | undefined,
+  toolCallId: string,
+): Record<string, unknown> | undefined {
+  const details = readMessageDetails(message);
+  const provenanceById = details?.[PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY];
+  if (!provenanceById || typeof provenanceById !== "object" || Array.isArray(provenanceById)) return undefined;
+  const provenance = (provenanceById as Record<string, unknown>)[toolCallId];
+  return provenance && typeof provenance === "object" && !Array.isArray(provenance)
+    ? (provenance as Record<string, unknown>)
+    : undefined;
+}
+
+function withToolProvenanceExtension(
+  extensions: Extensions,
+  message: Record<string, unknown> | undefined,
+  toolCallId: string,
+): Extensions {
+  const provenance = readToolProvenanceForCall(message, toolCallId);
+  if (!provenance) return extensions;
+  return { ...(extensions ?? {}), [PI_CLAUDE_CODE_TOOL_PROVENANCE_KEY]: provenance };
 }
 
 function piContentParts(value: unknown): ContentPart[] {
@@ -312,7 +344,7 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
                     arguments: record.arguments,
                   },
                   cache,
-                  extensions,
+                  extensions: withToolProvenanceExtension(extensions, message, record.id),
                   native: native(`message.assistant.content[${blockIndex}].toolCall`),
                 });
               }
