@@ -13,3 +13,33 @@
 - If a workaround makes a failing resume path "work" by dropping native session semantics, treat it as diagnostic only, not a valid final fix.
 - Current known gap: Claude resume seeds built from synthetic cross-provider history are still not natively lossless. The real fix is exact native Claude raw replay fidelity, not semantic reconstruction.
 - Do not add lossy export modes, native-only fallbacks that discard information, or tests that normalize away missing fidelity.
+
+## Determinism via metadata, not inference
+
+When a transformation is one-way at the API surface (e.g. demoting a foreign
+thinking block to `<thinking>`-wrapped text because claude rejects unsigned
+thinking) but you need to reverse it on a later import, **mark the change at
+the moment you make it** instead of trying to detect it later from the
+content shape.
+
+- Stash the recovery information on the JSONL line wrapper (a sibling of
+  `message`, which the API never sees), not inside the API message body.
+  The provider strips/ignores wrapper fields; lac reads them back.
+- Use the existing `losslessAgentContext` namespace for new wrapper markers
+  (see `LOSSLESS_RECOVERY_KEY` in `defaults.ts`). Each marker lists the
+  exact `contentIndex` (or other deterministic key) it applies to, plus the
+  original payload needed for reversal. Index-based recovery is exact —
+  zero false positives on text that merely *resembles* the demoted shape.
+- Never rely on regex / sentinel strings / pattern-matching content to
+  recover one-way transforms. A model legitimately discussing the convention
+  ("here's how `<thinking>` tags work...") must not get misclassified.
+- The same rule applies upstream: if you must drop or transform something
+  that another provider's importer will need, write the drop/transform fact
+  into the wrapper so the round-trip back is deterministic instead of
+  guessed.
+
+This is the lac-side half of the broader principle "don't infer whether a
+thing is recoverable, mark it at the point you know." Same rule applies in
+any consumer of these JSONL files (e.g. pi-claude-code's bridge, which uses
+the same trick on tool result `details` to differentiate synthetic fallbacks
+from real results).
