@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -27,12 +28,12 @@ describe("edge case: empty/edge content", () => {
         cwd: "/tmp",
         message: { role: "assistant", content: [{ type: "text", text: "" }] },
       })}\n`;
-      const events = importClaudeCodeJsonl(input);
+      const events = importClaudeCodeJsonl(input, emptySidecar());
       const messages = events.filter((e) => e.kind === "message.created");
       expect(messages.length).toBe(1);
 
       const exported = exportClaudeCodeJsonl(events);
-      const reimported = importClaudeCodeJsonl(exported);
+      const reimported = importClaudeCodeJsonl(exported, emptySidecar());
       expect(reimported.filter((e) => e.kind === "message.created")).toHaveLength(1);
     });
 
@@ -51,9 +52,9 @@ describe("edge case: empty/edge content", () => {
         cwd: "/tmp",
         message: { role: "assistant", content: [{ type: "tool_use", id: "tu_empty", name: "list_files", input: {} }] },
       })}\n`;
-      const events = importClaudeCodeJsonl(input);
+      const events = importClaudeCodeJsonl(input, emptySidecar());
       const exported = exportClaudeCodeJsonl(events);
-      const reimported = importClaudeCodeJsonl(exported);
+      const reimported = importClaudeCodeJsonl(exported, emptySidecar());
       const calls = reimported.filter((e) => e.kind === "tool.call");
       expect(calls).toHaveLength(1);
       if (calls[0]?.kind !== "tool.call") throw new Error("type narrowing");
@@ -131,12 +132,12 @@ describe("edge case: empty/edge content", () => {
           ],
         },
       })}\n`;
-      const events = importClaudeCodeJsonl(input);
+      const events = importClaudeCodeJsonl(input, emptySidecar());
       const results = events.filter((e) => e.kind === "tool.result");
       expect(results).toHaveLength(1);
 
       const exported = exportClaudeCodeJsonl(events);
-      const reimported = importClaudeCodeJsonl(exported);
+      const reimported = importClaudeCodeJsonl(exported, emptySidecar());
       const reResults = reimported.filter((e) => e.kind === "tool.result");
       expect(reResults).toHaveLength(1);
       if (reResults[0]?.kind !== "tool.result") throw new Error("type narrowing");

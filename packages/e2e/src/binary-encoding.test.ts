@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -51,7 +52,7 @@ ${JSON.stringify({
     expect(findFirstImageRef(canonical1)).toBe(ARBITRARY_BYTES_BASE64);
 
     const claudeText = exportClaudeCodeJsonl(canonical1);
-    const canonical2 = importClaudeCodeJsonl(claudeText);
+    const canonical2 = importClaudeCodeJsonl(claudeText, emptySidecar());
     expect(findFirstImageRef(canonical2)).toBe(ARBITRARY_BYTES_BASE64);
 
     const codexText = exportCodexJsonl(canonical2);

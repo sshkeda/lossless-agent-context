@@ -4,6 +4,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -151,7 +152,7 @@ describe("Codex SDK validation: real Codex JSONL schema accepts Pi -> Codex conv
 describe("Codex SDK validation: real Codex JSONL schema accepts Claude -> Codex conversion", () => {
   it("every native codex line matches the strict codex session JSONL schema", () => {
     const claudeText = readFixture("claude-code.jsonl");
-    const canonical = importClaudeCodeJsonl(claudeText);
+    const canonical = importClaudeCodeJsonl(claudeText, emptySidecar());
     const codexText = exportCodexJsonl(canonical);
     const lines = nativeOnlyLines(parseJsonlObjectLines(codexText).map((line) => jsonRecord.parse(line)));
 
@@ -167,7 +168,7 @@ describe("Codex SDK validation: real Codex JSONL schema accepts Claude -> Codex 
 
   it("session_meta line carries the claude session id, cwd, and only the metadata still proven necessary", () => {
     const claudeText = readFixture("claude-code.jsonl");
-    const canonical = importClaudeCodeJsonl(claudeText);
+    const canonical = importClaudeCodeJsonl(claudeText, emptySidecar());
     const codexText = exportCodexJsonl(canonical);
     const lines = parseJsonlObjectLines(codexText).map((line) => jsonRecord.parse(line));
 
@@ -182,7 +183,7 @@ describe("Codex SDK validation: real Codex JSONL schema accepts Claude -> Codex 
 
   it("assistant text + tool call + tool result survive claude → codex round-trip", () => {
     const claudeText = readFixture("claude-code.jsonl");
-    const canonical = importClaudeCodeJsonl(claudeText);
+    const canonical = importClaudeCodeJsonl(claudeText, emptySidecar());
     const codexText = exportCodexJsonl(canonical);
     const reimported = importCodexJsonl(codexText);
 

@@ -4,6 +4,7 @@ import {
   importPiSessionJsonl,
   type LosslessSidecar,
   prepareClaudeCodeResumeSeed,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -93,7 +94,7 @@ describe("cross-provider thinking demotion round-trip", () => {
     // Step 2: re-import the claude seed WITH the sidecar. The recovery
     // logic must promote the `<thinking>...</thinking>` text back to a
     // `reasoning.created` event so semantic intent survives.
-    const canonicalFromClaude = importClaudeCodeJsonl(seed, { sidecar });
+    const canonicalFromClaude = importClaudeCodeJsonl(seed, sidecar);
     const reasoningEvents = canonicalFromClaude.filter((e) => e.kind === "reasoning.created");
     expect(reasoningEvents).toHaveLength(1);
     expect(reasoningEvents[0]?.kind === "reasoning.created" && reasoningEvents[0].payload.text).toBe(codexReasoningText);
@@ -163,7 +164,7 @@ describe("cross-provider thinking demotion round-trip", () => {
       .join("\n") + "\n";
 
     // No sidecar passed → no recovery happens.
-    const canonical = importClaudeCodeJsonl(claudeJsonl);
+    const canonical = importClaudeCodeJsonl(claudeJsonl, emptySidecar());
     expect(canonical.filter((e) => e.kind === "reasoning.created")).toHaveLength(0);
     const textParts = canonical
       .filter((e): e is Extract<typeof e, { kind: "message.created" }> => e.kind === "message.created" && e.payload.role === "assistant")
@@ -206,7 +207,7 @@ describe("cross-provider thinking demotion round-trip", () => {
       },
     };
 
-    const canonical = importClaudeCodeJsonl(claudeJsonl, { sidecar });
+    const canonical = importClaudeCodeJsonl(claudeJsonl, sidecar);
     const reasoningEvents = canonical.filter((e) => e.kind === "reasoning.created");
     expect(reasoningEvents).toHaveLength(1);
     expect(reasoningEvents[0]?.kind === "reasoning.created" && reasoningEvents[0].payload.text).toBe("promoted reasoning");

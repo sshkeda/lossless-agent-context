@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -31,7 +32,7 @@ describe("empty input and whitespace-only files", () => {
     });
 
     it(`claude importer returns [] for ${label} input`, () => {
-      expect(importClaudeCodeJsonl(text)).toEqual([]);
+      expect(importClaudeCodeJsonl(text, emptySidecar())).toEqual([]);
     });
 
     it(`codex importer returns [] for ${label} input`, () => {
@@ -66,7 +67,7 @@ describe("fallback behavior", () => {
       },
     })}\n`;
 
-    const imported = importClaudeCodeJsonl(input);
+    const imported = importClaudeCodeJsonl(input, emptySidecar());
     const sessionId = imported[0]?.sessionId;
     expect(sessionId).toMatch(/^claude-code-session-[0-9a-f]{12}$/);
     expect(imported.every((event) => event.sessionId === sessionId)).toBe(true);

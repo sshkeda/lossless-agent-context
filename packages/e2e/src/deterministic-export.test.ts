@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 import { readFixture } from "./fixtures";
@@ -19,7 +20,7 @@ describe("deterministic export", () => {
   });
 
   it("pi exporter is byte-stable for the same claude canonical timeline", () => {
-    const canonical = importClaudeCodeJsonl(readFixture("claude-code.jsonl"));
+    const canonical = importClaudeCodeJsonl(readFixture("claude-code.jsonl"), emptySidecar());
     const first = exportPiSessionJsonl(canonical);
     const second = exportPiSessionJsonl(canonical);
     expect(second).toBe(first);
@@ -36,7 +37,7 @@ describe("deterministic export", () => {
     const canonical = importPiSessionJsonl(readFixture("pi.jsonl"));
 
     const firstClaude = exportClaudeCodeJsonl(canonical);
-    const viaClaude = importClaudeCodeJsonl(firstClaude);
+    const viaClaude = importClaudeCodeJsonl(firstClaude, emptySidecar());
     const codex = exportCodexJsonl(viaClaude);
     const viaCodex = importCodexJsonl(codex);
     const secondClaude = exportClaudeCodeJsonl(viaCodex);

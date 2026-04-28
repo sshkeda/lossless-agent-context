@@ -3,6 +3,7 @@ import {
   exportPiSessionJsonl,
   importClaudeCodeJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -84,7 +85,7 @@ const piErrInput = `${JSON.stringify({
 describe("edge case: tool.result isError=true preservation", () => {
   describe("import correctness", () => {
     it("claude tool_result with is_error=true imports isError=true", () => {
-      const events = importClaudeCodeJsonl(claudeErrInput);
+      const events = importClaudeCodeJsonl(claudeErrInput, emptySidecar());
       const result = findToolResult(events);
       expect(result?.payload.isError).toBe(true);
     });
@@ -99,9 +100,9 @@ describe("edge case: tool.result isError=true preservation", () => {
   describe("same-provider roundtrip preserves isError=true", () => {
     for (const { name } of LOSSLESS_CASES) {
       it(`claude → claude preserves is_error=true (${name})`, () => {
-        const c1 = importClaudeCodeJsonl(claudeErrInput);
+        const c1 = importClaudeCodeJsonl(claudeErrInput, emptySidecar());
         const exported = exportClaudeCodeJsonl(c1);
-        const c2 = importClaudeCodeJsonl(exported);
+        const c2 = importClaudeCodeJsonl(exported, emptySidecar());
         const result = findToolResult(c2);
         expect(result?.payload.isError).toBe(true);
       });
@@ -119,11 +120,11 @@ describe("edge case: tool.result isError=true preservation", () => {
   describe("cross-provider preserves isError=true", () => {
     for (const { name } of LOSSLESS_CASES) {
       it(`claude → pi → claude preserves isError=true (${name})`, () => {
-        const c1 = importClaudeCodeJsonl(claudeErrInput);
+        const c1 = importClaudeCodeJsonl(claudeErrInput, emptySidecar());
         const piText = exportPiSessionJsonl(c1);
         const c2 = importPiSessionJsonl(piText);
         const claudeText = exportClaudeCodeJsonl(c2);
-        const final = importClaudeCodeJsonl(claudeText);
+        const final = importClaudeCodeJsonl(claudeText, emptySidecar());
         const result = findToolResult(final);
         expect(result?.payload.isError).toBe(true);
       });
@@ -131,7 +132,7 @@ describe("edge case: tool.result isError=true preservation", () => {
       it(`pi → claude → pi preserves isError=true (${name})`, () => {
         const c1 = importPiSessionJsonl(piErrInput);
         const claudeText = exportClaudeCodeJsonl(c1);
-        const c2 = importClaudeCodeJsonl(claudeText);
+        const c2 = importClaudeCodeJsonl(claudeText, emptySidecar());
         const piText = exportPiSessionJsonl(c2);
         const final = importPiSessionJsonl(piText);
         const result = findToolResult(final);
@@ -160,9 +161,9 @@ describe("edge case: tool.result isError=true preservation", () => {
             content: [{ type: "tool_result", tool_use_id: "tu_ok", content: "OK", is_error: false }],
           },
         })}\n`;
-        const c1 = importClaudeCodeJsonl(successInput);
+        const c1 = importClaudeCodeJsonl(successInput, emptySidecar());
         const exported = exportClaudeCodeJsonl(c1);
-        const c2 = importClaudeCodeJsonl(exported);
+        const c2 = importClaudeCodeJsonl(exported, emptySidecar());
         const result = findToolResult(c2);
         expect(result?.payload.isError).toBe(false);
       });

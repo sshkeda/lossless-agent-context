@@ -1,4 +1,4 @@
-import { exportClaudeCodeJsonl, exportPiSessionJsonl, importClaudeCodeJsonl, importPiSessionJsonl } from "@lossless-agent-context/adapters";
+import { exportClaudeCodeJsonl, exportPiSessionJsonl, importClaudeCodeJsonl, importPiSessionJsonl , emptySidecar } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
 const PI_PROXY_FIXTURE = [
@@ -127,7 +127,7 @@ describe("pi MCP proxy normalization", () => {
   });
 
   it("normalizes pi_mcp_proxy__ tool names when importing Claude JSONL", () => {
-    const canonical = importClaudeCodeJsonl(CLAUDE_PROXY_FIXTURE);
+    const canonical = importClaudeCodeJsonl(CLAUDE_PROXY_FIXTURE, emptySidecar());
     const toolCall = findToolCall(canonical);
     const piText = exportPiSessionJsonl(canonical);
     const lines = parseJsonlObjects(piText);

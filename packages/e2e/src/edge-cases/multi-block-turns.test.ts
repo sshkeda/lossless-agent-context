@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -36,11 +37,11 @@ describe("edge case: multi-block assistant turns", () => {
           ],
         },
       })}\n`;
-      const c1 = importClaudeCodeJsonl(input);
+      const c1 = importClaudeCodeJsonl(input, emptySidecar());
       const piT = exportPiSessionJsonl(c1);
       const c2 = importPiSessionJsonl(piT);
       const claudeT = exportClaudeCodeJsonl(c2);
-      const final = importClaudeCodeJsonl(claudeT);
+      const final = importClaudeCodeJsonl(claudeT, emptySidecar());
 
       expect(final.filter((e) => e.kind === "reasoning.created")).toHaveLength(1);
       expect(final.filter((e) => e.kind === "tool.call")).toHaveLength(2);
@@ -80,7 +81,7 @@ describe("edge case: multi-block assistant turns", () => {
       expect(c1.filter((e) => e.kind === "reasoning.created")).toHaveLength(1);
 
       const claudeT = exportClaudeCodeJsonl(c1);
-      const c2 = importClaudeCodeJsonl(claudeT);
+      const c2 = importClaudeCodeJsonl(claudeT, emptySidecar());
       expect(c2.filter((e) => e.kind === "tool.call")).toHaveLength(2);
       expect(c2.filter((e) => e.kind === "tool.result")).toHaveLength(1);
       expect(c2.filter((e) => e.kind === "reasoning.created")).toHaveLength(1);

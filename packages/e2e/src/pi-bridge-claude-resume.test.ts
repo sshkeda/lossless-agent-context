@@ -1,4 +1,4 @@
-import { exportClaudeCodeJsonl, importClaudeCodeJsonl, importPiSessionJsonl } from "@lossless-agent-context/adapters";
+import { exportClaudeCodeJsonl, importClaudeCodeJsonl, importPiSessionJsonl , emptySidecar } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
 import { stripPiClaudeBridgeToolCyclesForClaudeResume } from "./bridge-policy";
@@ -33,7 +33,7 @@ describe("Pi bridge -> Claude resume regression", () => {
     expect(stripped.some((event) => event.kind === "tool.result" && event.payload.toolCallId === "call_1")).toBe(false);
 
     const exported = exportClaudeCodeJsonl(stripped);
-    const reimported = importClaudeCodeJsonl(exported);
+    const reimported = importClaudeCodeJsonl(exported, emptySidecar());
 
     expect(reimported.some((event) => event.kind === "tool.call" && event.payload.name === "ask_claude_code")).toBe(
       false,

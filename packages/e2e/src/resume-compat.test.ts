@@ -3,6 +3,7 @@ import {
   exportPiSessionJsonl,
   importClaudeCodeJsonl,
   importCodexJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 import { readFixture } from "./fixtures";
@@ -11,7 +12,7 @@ import { codexEventMsgLine, codexSessionMetaLine, jsonRecord } from "./sdk-schem
 
 describe("resume compatibility", () => {
   it("codex export emits minimal session metadata plus a thread registration event for resume", () => {
-    const canonical = importClaudeCodeJsonl(readFixture("claude-code.jsonl"));
+    const canonical = importClaudeCodeJsonl(readFixture("claude-code.jsonl"), emptySidecar());
     const text = exportCodexJsonl(canonical);
     const lines = parseJsonlObjectLines(text).map((line) => jsonRecord.parse(line));
 

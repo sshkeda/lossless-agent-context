@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { CANONICAL_SCHEMA_VERSION, type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -109,7 +110,7 @@ describe("edge case: causality field preservation through canonical-only kinds",
       native: { source: "claude-code", raw: { type: "lac:runtime_error", code: "EBOOM" } },
     });
     const claudeText = exportClaudeCodeJsonl([claudeSession(sessionId), errEvent]);
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const re = reimported.find((e) => e.kind === "runtime.error");
     expect(re).toBeDefined();
     if (re?.kind !== "runtime.error") throw new Error("type narrowing");
@@ -212,7 +213,7 @@ describe("edge case: native-encoded extensions (claude thinking signature) round
         content: [{ type: "thinking", thinking: "secret thought", signature: "sig-deadbeef" }],
       },
     })}\n`;
-    const events = importClaudeCodeJsonl(input);
+    const events = importClaudeCodeJsonl(input, emptySidecar());
     const reasoning = events.find((e) => e.kind === "reasoning.created");
     expect(reasoning).toBeDefined();
     if (reasoning?.kind !== "reasoning.created") throw new Error("type narrowing");
@@ -239,7 +240,7 @@ describe("edge case: cross-provider causality preservation on native-equivalent 
         content: [{ type: "tool_use", id: "tu_1", name: "Bash", input: { cmd: "ls" } }],
       },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const toolCallIndex = c1.findIndex((e) => e.kind === "tool.call");
     expect(toolCallIndex).toBeGreaterThanOrEqual(0);
     const original = c1[toolCallIndex];
@@ -279,11 +280,11 @@ describe("edge case: cross-provider causality preservation on native-equivalent 
         content: [{ type: "thinking", thinking: "secret", signature: "sig-roundtrip" }],
       },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const piT = exportPiSessionJsonl(c1);
     const c2 = importPiSessionJsonl(piT);
     const claudeT = exportClaudeCodeJsonl(c2);
-    const c3 = importClaudeCodeJsonl(claudeT);
+    const c3 = importClaudeCodeJsonl(claudeT, emptySidecar());
     const reasoning = c3.find((e) => e.kind === "reasoning.created");
     expect(reasoning).toBeDefined();
     if (reasoning?.kind !== "reasoning.created") throw new Error("type narrowing");
@@ -308,7 +309,7 @@ describe("edge case: cross-provider causality preservation on native-equivalent 
         content: [{ type: "tool_result", tool_use_id: "tu_x", content: "ok", is_error: false }],
       },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const trIndex = c1.findIndex((e) => e.kind === "tool.result");
     expect(trIndex).toBeGreaterThanOrEqual(0);
     const original = c1[trIndex];

@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { CANONICAL_SCHEMA_VERSION, type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -114,7 +115,7 @@ describe("edge case: model.requested event preservation through native exporters
       },
     });
     const claudeText = exportClaudeCodeJsonl([claudeSession(sessionId), requested]);
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const re = reimported.find((e) => e.kind === "model.requested");
     expect(re).toBeDefined();
     if (re?.kind !== "model.requested") throw new Error("type narrowing");

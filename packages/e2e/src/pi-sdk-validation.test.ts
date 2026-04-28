@@ -1,4 +1,4 @@
-import { exportPiSessionJsonl, importClaudeCodeJsonl, importCodexJsonl } from "@lossless-agent-context/adapters";
+import { exportPiSessionJsonl, importClaudeCodeJsonl, importCodexJsonl , emptySidecar } from "@lossless-agent-context/adapters";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import {
   buildSessionContext,
@@ -32,7 +32,7 @@ for (const { name } of LOSSLESS_CASES) {
   describe(`Pi SDK validation (${name}): real Pi parser accepts Claude -> Pi conversion`, () => {
     it("parseSessionEntries returns header + body entries for converted Claude session", () => {
       const claudeText = readFixture("claude-code.jsonl");
-      const canonical = importClaudeCodeJsonl(claudeText);
+      const canonical = importClaudeCodeJsonl(claudeText, emptySidecar());
       const piText = exportPiSessionJsonl(canonical);
 
       const fileEntries = parseSessionEntries(piText);
@@ -51,7 +51,7 @@ for (const { name } of LOSSLESS_CASES) {
 
     it("buildSessionContext returns the Claude prompt + assistant response as Pi messages", () => {
       const claudeText = readFixture("claude-code.jsonl");
-      const canonical = importClaudeCodeJsonl(claudeText);
+      const canonical = importClaudeCodeJsonl(claudeText, emptySidecar());
       const piText = exportPiSessionJsonl(canonical);
 
       const fileEntries = parseSessionEntries(piText);
@@ -87,7 +87,7 @@ for (const { name } of LOSSLESS_CASES) {
 
     it("the Claude tool_result becomes a Pi toolResult message with the same payload", () => {
       const claudeText = readFixture("claude-code.jsonl");
-      const canonical = importClaudeCodeJsonl(claudeText);
+      const canonical = importClaudeCodeJsonl(claudeText, emptySidecar());
       const piText = exportPiSessionJsonl(canonical);
 
       const fileEntries = parseSessionEntries(piText);

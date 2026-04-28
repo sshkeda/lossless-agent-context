@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -37,7 +38,7 @@ describe("edge case: reasoning visibility per-provider defaults", () => {
         content: [{ type: "thinking", thinking: "reasoning text" }],
       },
     })}\n`;
-    const events = importClaudeCodeJsonl(input);
+    const events = importClaudeCodeJsonl(input, emptySidecar());
     const reasoning = findReasoning(events);
     expect(reasoning).toBeDefined();
     expect(reasoning?.payload.visibility).toBe("full");
@@ -119,9 +120,9 @@ describe("edge case: reasoning visibility same-provider roundtrips preserve defa
         cwd: "/tmp",
         message: { role: "assistant", content: [{ type: "thinking", thinking: "rt thought" }] },
       })}\n`;
-      const c1 = importClaudeCodeJsonl(input);
+      const c1 = importClaudeCodeJsonl(input, emptySidecar());
       const exported = exportClaudeCodeJsonl(c1);
-      const c2 = importClaudeCodeJsonl(exported);
+      const c2 = importClaudeCodeJsonl(exported, emptySidecar());
       const reasoning = findReasoning(c2);
       expect(reasoning?.payload.visibility).toBe("full");
       expect(reasoning?.payload.text).toBe("rt thought");
@@ -189,7 +190,7 @@ describe("edge case: cross-provider visibility is preserved in lossless exports"
       cwd: "/tmp",
       message: { role: "assistant", content: [{ type: "thinking", thinking: "cross-provider" }] },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const codexText = exportCodexJsonl(c1);
     const c2 = importCodexJsonl(codexText);
     const reasoning = findReasoning(c2);
@@ -209,7 +210,7 @@ describe("edge case: cross-provider visibility is preserved in lossless exports"
     })}\n`;
     const c1 = importCodexJsonl(input);
     const claudeText = exportClaudeCodeJsonl(c1);
-    const c2 = importClaudeCodeJsonl(claudeText);
+    const c2 = importClaudeCodeJsonl(claudeText, emptySidecar());
     const reasoning = findReasoning(c2);
     expect(reasoning?.payload.visibility).toBe("summary");
     expect(reasoning?.payload.text).toBe("codex→claude");
@@ -255,13 +256,13 @@ describe("edge case: cross-provider visibility is preserved in lossless exports"
       cwd: "/tmp",
       message: { role: "assistant", content: [{ type: "thinking", thinking: "3-hop" }] },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const piT = exportPiSessionJsonl(c1);
     const c2 = importPiSessionJsonl(piT);
     const codexT = exportCodexJsonl(c2);
     const c3 = importCodexJsonl(codexT);
     const claudeT = exportClaudeCodeJsonl(c3);
-    const final = importClaudeCodeJsonl(claudeT);
+    const final = importClaudeCodeJsonl(claudeT, emptySidecar());
     const reasoning = findReasoning(final);
     expect(reasoning?.payload.visibility).toBe("full");
     expect(reasoning?.payload.text).toBe("3-hop");

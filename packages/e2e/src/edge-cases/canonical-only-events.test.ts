@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { CANONICAL_SCHEMA_VERSION, type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -81,7 +82,7 @@ describe("edge case: canonical-only event kinds preserved through native exporte
       },
     });
     const claudeText = exportClaudeCodeJsonl([sessionClaude, errEvent]);
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const re = reimported.find((e) => e.kind === "runtime.error");
     expect(re).toBeDefined();
     if (re?.kind !== "runtime.error") throw new Error("type narrowing");

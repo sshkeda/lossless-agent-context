@@ -2,6 +2,7 @@ import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { canonicalEventSchema, resolveCanonicalSchemaVersion } from "@lossless-agent-context/core";
 import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
 import { importClaudeCodeJsonl } from "./import-claude-code";
+import { emptySidecar } from "./recovery-sidecar";
 import { importCodexJsonl } from "./import-codex";
 import { importPiSessionJsonl } from "./import-pi";
 import { stableJsonStringify } from "./utils";
@@ -433,7 +434,7 @@ export function reimportForeignRaw(envelope: ForeignEnvelope): CanonicalEvent[] 
     case "pi":
       return importPiSessionJsonl(jsonl);
     case "claude-code":
-      return importClaudeCodeJsonl(jsonl);
+      return importClaudeCodeJsonl(jsonl, emptySidecar());
     case "codex":
       return importCodexJsonl(jsonl);
     default:

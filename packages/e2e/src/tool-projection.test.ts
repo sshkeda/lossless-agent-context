@@ -3,6 +3,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 import { readFixture } from "./fixtures";
@@ -339,7 +340,7 @@ describe("Claude native tool projections", () => {
 
     expect(Array.isArray(assistantLine?.__lac_canonical)).toBe(true);
 
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const toolCall = reimported.find((event) => event.kind === "tool.call");
 
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("read");
@@ -377,7 +378,7 @@ describe("Claude native tool projections", () => {
       },
     });
 
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const toolCall = reimported.find((event) => event.kind === "tool.call");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("exec_command");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({ cmd: "echo hello" });
@@ -405,7 +406,7 @@ describe("Claude native tool projections", () => {
       },
     });
 
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const toolCall = reimported.find((event) => event.kind === "tool.call");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("ls");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({
@@ -438,7 +439,7 @@ describe("Claude native tool projections", () => {
       },
     });
 
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const toolCall = reimported.find((event) => event.kind === "tool.call");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("edit");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({
@@ -474,7 +475,7 @@ describe("Claude native tool projections", () => {
   });
 
   it("normalizes native Claude Edit calls back into Pi edit arguments when the mapping is lossless", () => {
-    const canonical = importClaudeCodeJsonl(CLAUDE_EDIT_FIXTURE);
+    const canonical = importClaudeCodeJsonl(CLAUDE_EDIT_FIXTURE, emptySidecar());
     const toolCall = canonical.find((event) => event.kind === "tool.call");
     const toolResult = canonical.find((event) => event.kind === "tool.result");
 
@@ -510,7 +511,7 @@ describe("Claude native tool projections", () => {
       },
     });
 
-    const reimported = importClaudeCodeJsonl(claudeText);
+    const reimported = importClaudeCodeJsonl(claudeText, emptySidecar());
     const toolCall = reimported.find((event) => event.kind === "tool.call");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("bash");
     expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({

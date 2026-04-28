@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { CANONICAL_SCHEMA_VERSION, type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -89,7 +90,7 @@ ${JSON.stringify({
 })}
 `;
 
-    const events = importClaudeCodeJsonl(text);
+    const events = importClaudeCodeJsonl(text, emptySidecar());
     const sessions = events.filter((e) => e.kind === "session.created");
     const messages = events.filter((e) => e.kind === "message.created");
 
@@ -159,7 +160,7 @@ describe("import hardening: missing native line type", () => {
 
   it("claude importer preserves raw lines missing type with an explicit missing_type event label", () => {
     const text = `${JSON.stringify({ sessionId: "claude-missing-type", timestamp: TS, payload: { hello: true } })}\n`;
-    const events = importClaudeCodeJsonl(text);
+    const events = importClaudeCodeJsonl(text, emptySidecar());
     const preserved = events.find(
       (event): event is Extract<CanonicalEvent, { kind: "provider.event" }> => event.kind === "provider.event",
     );
@@ -300,7 +301,7 @@ ${JSON.stringify({
   message: { role: "user", content: "from-a" },
 })}
 `;
-    expect(() => importClaudeCodeJsonl(text)).toThrow(/Invalid Claude line timestamp/);
+    expect(() => importClaudeCodeJsonl(text, emptySidecar())).toThrow(/Invalid Claude line timestamp/);
   });
 
   it("preserves Claude last-prompt lines as provider events without borrowing timestamps", () => {
@@ -326,7 +327,7 @@ ${JSON.stringify({
   message: { role: "user", content: "real-user-line" },
 })}
 `;
-    const events = importClaudeCodeJsonl(text);
+    const events = importClaudeCodeJsonl(text, emptySidecar());
     const preserved = events.find(
       (event): event is Extract<(typeof events)[number], { kind: "provider.event" }> =>
         event.kind === "provider.event" && event.payload.eventType === "last-prompt",
@@ -361,7 +362,7 @@ ${JSON.stringify({
   message: { role: "user", content: "real-user-line" },
 })}
 `;
-    const events = importClaudeCodeJsonl(text);
+    const events = importClaudeCodeJsonl(text, emptySidecar());
 
     const sessions = events.filter(
       (event): event is Extract<(typeof events)[number], { kind: "session.created" }> =>
@@ -402,7 +403,7 @@ ${JSON.stringify({
   message: { role: "user", content: "real-user-line" },
 })}
 `;
-    const events = importClaudeCodeJsonl(text);
+    const events = importClaudeCodeJsonl(text, emptySidecar());
 
     const sessions = events.filter(
       (event): event is Extract<(typeof events)[number], { kind: "session.created" }> =>
@@ -475,7 +476,7 @@ ${JSON.stringify({
 })}
 `;
 
-    const imported = importClaudeCodeJsonl(text);
+    const imported = importClaudeCodeJsonl(text, emptySidecar());
     const viaPi = importPiSessionJsonl(exportPiSessionJsonl(imported));
     const reexported = exportClaudeCodeJsonl(viaPi)
       .split(/\r?\n/)
@@ -610,7 +611,7 @@ describe("import hardening: cross-provider branch preservation", () => {
       },
     });
 
-    const reimported = importClaudeCodeJsonl(exportClaudeCodeJsonl([session, branch, message]));
+    const reimported = importClaudeCodeJsonl(exportClaudeCodeJsonl([session, branch, message]), emptySidecar());
     const reimportedBranch = reimported.find((e) => e.kind === "branch.created");
     const reimportedMessage = reimported.find(
       (e) =>

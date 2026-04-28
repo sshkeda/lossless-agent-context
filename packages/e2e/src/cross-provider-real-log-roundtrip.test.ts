@@ -139,7 +139,7 @@ describe("cross-provider real-log round-trip", () => {
       let codexExport: string;
       try {
         const { jsonl: seed, sidecar } = prepareClaudeCodeResumeSeed(canonicalFromPi, "test-target-session-id");
-        canonicalFromClaude = importClaudeCodeJsonl(seed, { sidecar });
+        canonicalFromClaude = importClaudeCodeJsonl(seed, sidecar);
         codexExport = exportCodexJsonl(canonicalFromClaude);
       } catch (err) {
         findings.push({ path, issue: `pipeline threw: ${err instanceof Error ? err.message : String(err)}` });

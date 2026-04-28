@@ -206,22 +206,21 @@ function toolResultDetailsFromClaudeRecord(
   return { structuredToolResultDetails: structured, ...editDetails };
 }
 
-export interface ImportClaudeCodeOptions {
-  /**
-   * Optional recovery sidecar parsed from the seed's `<jsonl>.lossless.json`.
-   * If provided, the importer reads markers keyed by claude line uuid and
-   * applies them deterministically (e.g. promoting demoted-thinking text
-   * blocks back to `reasoning.created` events). Omit when the JSONL was
-   * not produced by lac — the importer falls through to default handling.
-   */
-  sidecar?: LosslessSidecar;
-}
-
-export function importClaudeCodeJsonl(text: string, options?: ImportClaudeCodeOptions): CanonicalEvent[] {
+/**
+ * Imports a claude-code session JSONL plus its recovery sidecar.
+ *
+ * The sidecar parameter is REQUIRED. If the session has no recovery markers
+ * (e.g. a native claude session that wasn't produced by lac), pass
+ * `emptySidecar()` from `recovery-sidecar.ts`. Forcing every caller to
+ * explicitly hand in a sidecar (or an empty one) prevents the silent
+ * recovery-loss bug where a caller forgets to load the sidecar from disk
+ * and silently degrades round-trip fidelity. See AGENTS.md ("mark, don't
+ * infer").
+ */
+export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): CanonicalEvent[] {
   const entries = parseJsonlWithText(text);
   const lines = entries.map((entry) => entry.line);
   const events: CanonicalEvent[] = [];
-  const sidecar = options?.sidecar;
 
   const firstNativeLine = lines.find((line) => !isForeignLine(line) && typeof line.sessionId === "string");
   let currentSessionId =

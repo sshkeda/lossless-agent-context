@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -29,9 +30,9 @@ describe("edge case: very long content", () => {
         cwd: "/tmp",
         message: { role: "user", content: LONG_TEXT },
       })}\n`;
-      const events = importClaudeCodeJsonl(input);
+      const events = importClaudeCodeJsonl(input, emptySidecar());
       const exported = exportClaudeCodeJsonl(events);
-      const reimported = importClaudeCodeJsonl(exported);
+      const reimported = importClaudeCodeJsonl(exported, emptySidecar());
       const userMessage = reimported.find((e) => e.kind === "message.created" && e.payload.role === "user");
       if (userMessage?.kind !== "message.created") throw new Error("type narrowing");
       const part = userMessage.payload.parts.find((p) => p.type === "text");

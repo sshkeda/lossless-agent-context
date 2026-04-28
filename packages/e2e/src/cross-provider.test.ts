@@ -6,6 +6,7 @@ import {
   importCodexJsonl,
   importPiSessionJsonl,
   inspectShadowAlignmentStrategy,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -229,8 +230,8 @@ describe("same-provider override alignment", () => {
       },
     })}\n`;
 
-    const events = importClaudeCodeJsonl(input).filter((event) => event.kind !== "session.created");
-    const shadow = importClaudeCodeJsonl(input).filter((event) => event.kind !== "session.created");
+    const events = importClaudeCodeJsonl(input, emptySidecar()).filter((event) => event.kind !== "session.created");
+    const shadow = importClaudeCodeJsonl(input, emptySidecar()).filter((event) => event.kind !== "session.created");
 
     expect(inspectShadowAlignmentStrategy(events, shadow)).toBe("rawRef");
   });
@@ -267,8 +268,8 @@ describe("same-provider override alignment", () => {
           }),
         );
 
-    const events = stripRawRefs(importClaudeCodeJsonl(input));
-    const shadow = stripRawRefs(importClaudeCodeJsonl(input));
+    const events = stripRawRefs(importClaudeCodeJsonl(input, emptySidecar()));
+    const shadow = stripRawRefs(importClaudeCodeJsonl(input, emptySidecar()));
 
     expect(inspectShadowAlignmentStrategy(events, shadow)).toBe("sequential");
   });
@@ -295,7 +296,7 @@ describe("same-provider override alignment", () => {
       },
     })}\n`;
 
-    const base = importClaudeCodeJsonl(input)
+    const base = importClaudeCodeJsonl(input, emptySidecar())
       .filter((event) => event.kind !== "session.created")
       .map((event) =>
         canonicalEventSchema.parse({
@@ -342,7 +343,7 @@ describe("same-provider override alignment", () => {
       },
     })}\n`;
 
-    const canonical = importClaudeCodeJsonl(input);
+    const canonical = importClaudeCodeJsonl(input, emptySidecar());
     const secondToolCallIndex = canonical.findIndex(
       (event) => event.kind === "tool.call" && event.payload.toolCallId === "call_2",
     );

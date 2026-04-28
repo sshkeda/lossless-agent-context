@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 import { parseJsonlObjectLines } from "../jsonl";
@@ -65,7 +66,7 @@ describe("edge case: citations and cache markers", () => {
     ]);
 
     const claudeText = exportClaudeCodeJsonl(canonical1);
-    const canonical2 = importClaudeCodeJsonl(claudeText);
+    const canonical2 = importClaudeCodeJsonl(claudeText, emptySidecar());
     const codexText = exportCodexJsonl(canonical2);
     const codexLines = parseJsonlObjectLines(codexText);
     const assistantLine = codexLines.find(
@@ -122,11 +123,11 @@ describe("edge case: citations and cache markers", () => {
       },
     })}\n`;
 
-    const canonical1 = importClaudeCodeJsonl(input);
+    const canonical1 = importClaudeCodeJsonl(input, emptySidecar());
     const piText = exportPiSessionJsonl(canonical1);
     const canonical2 = importPiSessionJsonl(piText);
     const claudeText = exportClaudeCodeJsonl(canonical2);
-    const final = importClaudeCodeJsonl(claudeText);
+    const final = importClaudeCodeJsonl(claudeText, emptySidecar());
     const cached = final.find((event) => event.cache?.readTokens === 21 && event.cache?.writeTokens === 34);
     expect(cached).toBeDefined();
     expect(cached?.cache?.details).toEqual({ cache_creation: { ephemeral_1h_input_tokens: 34 } });

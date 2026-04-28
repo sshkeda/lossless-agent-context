@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -30,14 +31,14 @@ describe("edge case: orphan tool call (no matching result)", () => {
           content: [{ type: "tool_use", id: "tool_orphan_1", name: "Bash", input: { command: "ls" } }],
         },
       })}\n`;
-      const events = importClaudeCodeJsonl(input);
+      const events = importClaudeCodeJsonl(input, emptySidecar());
       const toolCalls = events.filter((e) => e.kind === "tool.call");
       const toolResults = events.filter((e) => e.kind === "tool.result");
       expect(toolCalls).toHaveLength(1);
       expect(toolResults).toHaveLength(0);
 
       const exported = exportClaudeCodeJsonl(events);
-      const reimported = importClaudeCodeJsonl(exported);
+      const reimported = importClaudeCodeJsonl(exported, emptySidecar());
       const reimportedCalls = reimported.filter((e) => e.kind === "tool.call");
       const reimportedResults = reimported.filter((e) => e.kind === "tool.result");
       expect(reimportedCalls).toHaveLength(1);
@@ -111,11 +112,11 @@ describe("edge case: orphan tool call (no matching result)", () => {
           content: [{ type: "tool_use", id: "tu_x", name: "Read", input: { path: "/x" } }],
         },
       })}\n`;
-      const canonical1 = importClaudeCodeJsonl(input);
+      const canonical1 = importClaudeCodeJsonl(input, emptySidecar());
       const piText = exportPiSessionJsonl(canonical1);
       const canonical2 = importPiSessionJsonl(piText);
       const claudeText = exportClaudeCodeJsonl(canonical2);
-      const final = importClaudeCodeJsonl(claudeText);
+      const final = importClaudeCodeJsonl(claudeText, emptySidecar());
       const calls = final.filter((e) => e.kind === "tool.call");
       expect(calls).toHaveLength(1);
       if (calls[0]?.kind !== "tool.call") throw new Error("type narrowing");
@@ -144,12 +145,12 @@ describe("edge case: orphan tool result (no preceding call)", () => {
           content: [{ type: "tool_result", tool_use_id: "tu_missing", content: "leftover", is_error: false }],
         },
       })}\n`;
-      const events = importClaudeCodeJsonl(input);
+      const events = importClaudeCodeJsonl(input, emptySidecar());
       const toolResults = events.filter((e) => e.kind === "tool.result");
       expect(toolResults).toHaveLength(1);
 
       const exported = exportClaudeCodeJsonl(events);
-      const reimported = importClaudeCodeJsonl(exported);
+      const reimported = importClaudeCodeJsonl(exported, emptySidecar());
       expect(reimported.filter((e) => e.kind === "tool.result")).toHaveLength(1);
     });
 

@@ -4,6 +4,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   prepareClaudeCodeResumeSeed,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -57,7 +58,7 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
       .join("\n") + "\n";
 
     // Step 1: claude session → canonical
-    const canonicalFromClaude = importClaudeCodeJsonl(claudeJsonl);
+    const canonicalFromClaude = importClaudeCodeJsonl(claudeJsonl, emptySidecar());
     expect(canonicalFromClaude.filter((e) => e.kind === "reasoning.created")).toHaveLength(1);
 
     // Step 2: canonical → codex export. The claude signature is opaque to
@@ -133,7 +134,7 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // Pass the sidecar so the re-import has access to any recovery markers
     // (here there shouldn't be any since the signature path was native,
     // but we always pass the sidecar for completeness).
-    const canonicalFromSeed = importClaudeCodeJsonl(seed, { sidecar });
+    const canonicalFromSeed = importClaudeCodeJsonl(seed, sidecar);
     const reasoningTextsAfterReimport = canonicalFromSeed
       .filter((e): e is Extract<typeof e, { kind: "reasoning.created" }> => e.kind === "reasoning.created")
       .map((e) => e.payload.text);
@@ -215,7 +216,7 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     });
 
     // Re-import must restore the reasoning event using the sidecar marker.
-    const canonical = importClaudeCodeJsonl(seed, { sidecar });
+    const canonical = importClaudeCodeJsonl(seed, sidecar);
     const reasoning = canonical.filter((e) => e.kind === "reasoning.created");
     expect(reasoning).toHaveLength(1);
     expect(reasoning[0]?.kind === "reasoning.created" && reasoning[0].payload.text).toBe(reasoningText);
@@ -245,14 +246,14 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
       .join("\n") + "\n";
 
     // Hop 1: claude → codex
-    const canonical1 = importClaudeCodeJsonl(initialClaudeJsonl);
+    const canonical1 = importClaudeCodeJsonl(initialClaudeJsonl, emptySidecar());
     const codex1 = exportCodexJsonl(canonical1);
     // Hop 2: codex → claude (via prepareClaudeCodeResumeSeed)
     const canonical2 = importCodexJsonl(codex1);
     const { jsonl: claudeSeed, sidecar: sidecar1 } = prepareClaudeCodeResumeSeed(canonical2, "round-trip-1");
     // Hop 3: claude (the seed) → codex. Pass the sidecar through so any
     // demoted-reasoning markers from hop 2 are honored on this re-import.
-    const canonical3 = importClaudeCodeJsonl(claudeSeed, { sidecar: sidecar1 });
+    const canonical3 = importClaudeCodeJsonl(claudeSeed, sidecar1);
     const codex2 = exportCodexJsonl(canonical3);
     // Hop 4: codex → claude (via seed prep again)
     const canonical4 = importCodexJsonl(codex2);

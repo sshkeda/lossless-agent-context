@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 
@@ -30,7 +31,7 @@ describe("edge case: unicode and special characters", () => {
         cwd: "/tmp",
         message: { role: "user", content: UNICODE_SAMPLE },
       })}\n`;
-      const events = importClaudeCodeJsonl(input);
+      const events = importClaudeCodeJsonl(input, emptySidecar());
       const userMessage = events.find((e) => e.kind === "message.created" && e.payload.role === "user");
       if (userMessage?.kind !== "message.created") throw new Error("type narrowing");
       const textPart = userMessage.payload.parts.find((p) => p.type === "text");
@@ -38,7 +39,7 @@ describe("edge case: unicode and special characters", () => {
       expect(textPart.text).toBe(UNICODE_SAMPLE);
 
       const exported = exportClaudeCodeJsonl(events);
-      const reimported = importClaudeCodeJsonl(exported);
+      const reimported = importClaudeCodeJsonl(exported, emptySidecar());
       const reUser = reimported.find((e) => e.kind === "message.created" && e.payload.role === "user");
       if (reUser?.kind !== "message.created") throw new Error("type narrowing");
       const rePart = reUser.payload.parts.find((p) => p.type === "text");
@@ -122,13 +123,13 @@ describe("edge case: unicode and special characters", () => {
         cwd: "/tmp",
         message: { role: "user", content: UNICODE_SAMPLE },
       })}\n`;
-      const c1 = importClaudeCodeJsonl(input);
+      const c1 = importClaudeCodeJsonl(input, emptySidecar());
       const piT = exportPiSessionJsonl(c1);
       const c2 = importPiSessionJsonl(piT);
       const codexT = exportCodexJsonl(c2);
       const c3 = importCodexJsonl(codexT);
       const claudeT = exportClaudeCodeJsonl(c3);
-      const final = importClaudeCodeJsonl(claudeT);
+      const final = importClaudeCodeJsonl(claudeT, emptySidecar());
 
       const userMessage = final.find((e) => e.kind === "message.created" && e.payload.role === "user");
       if (userMessage?.kind !== "message.created") throw new Error("type narrowing");

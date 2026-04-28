@@ -1,4 +1,4 @@
-import { importClaudeCodeJsonl } from "@lossless-agent-context/adapters";
+import { importClaudeCodeJsonl , emptySidecar } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
 import { readFixture } from "./fixtures";
@@ -39,7 +39,7 @@ describe("Claude real native shape corpus", () => {
   });
 
   it("imports representative real Claude shapes into a sane canonical timeline", () => {
-    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"));
+    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"), emptySidecar());
 
     expect(byKind(events, "session.created").length).toBeGreaterThanOrEqual(4);
     expect(byKind(events, "message.created").length).toBeGreaterThanOrEqual(3);
@@ -50,7 +50,7 @@ describe("Claude real native shape corpus", () => {
   });
 
   it("preserves real Claude tool and tool_result semantics from the committed corpus", () => {
-    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"));
+    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"), emptySidecar());
 
     const toolCall = events.find(
       (event): event is Extract<CanonicalEvent, { kind: "tool.call" }> => event.kind === "tool.call",
@@ -69,7 +69,7 @@ describe("Claude real native shape corpus", () => {
   });
 
   it("preserves harvested Claude queue, attachment, last-prompt, permission-mode, and file-history-snapshot shapes as provider events", () => {
-    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"));
+    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"), emptySidecar());
     const providerEvents = events.filter(
       (event): event is Extract<CanonicalEvent, { kind: "provider.event" }> => event.kind === "provider.event",
     );
@@ -83,7 +83,7 @@ describe("Claude real native shape corpus", () => {
   });
 
   it("imports harvested Claude sdk-cli user/tool/text/thinking variants into canonical events", () => {
-    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"));
+    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"), emptySidecar());
 
     const textMessages: string[] = [];
     for (const event of events) {
@@ -110,7 +110,7 @@ describe("Claude real native shape corpus", () => {
   });
 
   it("imports Claude cache usage markers as structured canonical cache metadata", () => {
-    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"));
+    const events = importClaudeCodeJsonl(readFixture("claude-real-shapes.jsonl"), emptySidecar());
     const cached = events.find(
       (event) => event.cache?.readTokens !== undefined || event.cache?.writeTokens !== undefined,
     );

@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { CANONICAL_SCHEMA_VERSION, type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
@@ -57,7 +58,7 @@ describe("edge case: session.created title/tags cross-provider preservation", ()
     const piText = exportPiSessionJsonl([session]);
     const c2 = importPiSessionJsonl(piText);
     const claudeText = exportClaudeCodeJsonl(c2);
-    const final = importClaudeCodeJsonl(claudeText);
+    const final = importClaudeCodeJsonl(claudeText, emptySidecar());
     const roundtripped = final.find((e) => e.kind === "session.created");
     expect(roundtripped).toBeDefined();
     if (roundtripped?.kind !== "session.created") throw new Error("type narrowing");
@@ -88,7 +89,7 @@ describe("edge case: session.created title/tags cross-provider preservation", ()
       model: "claude-3-opus-20240229",
     });
     const claudeText = exportClaudeCodeJsonl([session]);
-    const c2 = importClaudeCodeJsonl(claudeText);
+    const c2 = importClaudeCodeJsonl(claudeText, emptySidecar());
     const piText = exportPiSessionJsonl(c2);
     const final = importPiSessionJsonl(piText);
     const roundtripped = final.find((e) => e.kind === "session.created");
@@ -117,7 +118,7 @@ describe("edge case: tool.result.error cross-provider preservation", () => {
         content: [{ type: "tool_result", tool_use_id: "tu_e", content: "boom", is_error: true }],
       },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const trIndex = c1.findIndex((e) => e.kind === "tool.result");
     const original = c1[trIndex];
     if (!original) throw new Error("missing tool.result");
@@ -158,7 +159,7 @@ describe("edge case: tool.result.error cross-provider preservation", () => {
 
     const c1 = importPiSessionJsonl(input);
     const claudeText = exportClaudeCodeJsonl(c1);
-    const c2 = importClaudeCodeJsonl(claudeText);
+    const c2 = importClaudeCodeJsonl(claudeText, emptySidecar());
     const piText = exportPiSessionJsonl(c2);
     const final = importPiSessionJsonl(piText);
     const tr = final.find((event) => event.kind === "tool.result");
@@ -194,7 +195,7 @@ describe("edge case: tool.result.error cross-provider preservation", () => {
 
     const c1 = importPiSessionJsonl(input);
     const claudeText = exportClaudeCodeJsonl(c1);
-    const c2 = importClaudeCodeJsonl(claudeText);
+    const c2 = importClaudeCodeJsonl(claudeText, emptySidecar());
     const piText = exportPiSessionJsonl(c2);
     const final = importPiSessionJsonl(piText);
     const tr = final.find((event) => event.kind === "tool.result");
@@ -236,7 +237,7 @@ describe("edge case: tool.result.error cross-provider preservation", () => {
       },
     })}\n`;
 
-    const events = importClaudeCodeJsonl(input);
+    const events = importClaudeCodeJsonl(input, emptySidecar());
     const tr = events.find((event) => event.kind === "tool.result");
     if (tr?.kind !== "tool.result") throw new Error("type narrowing");
     expect(tr.payload.details).toEqual({
@@ -265,7 +266,7 @@ describe("edge case: actor rich-field cross-provider preservation", () => {
         content: [{ type: "tool_use", id: "tu_a", name: "Bash", input: { cmd: "ls" } }],
       },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const tcIndex = c1.findIndex((e) => e.kind === "tool.call");
     const original = c1[tcIndex];
     if (!original) throw new Error("missing tool.call");
@@ -305,7 +306,7 @@ describe("edge case: actor rich-field cross-provider preservation", () => {
       cwd: "/tmp",
       message: { role: "assistant", content: [{ type: "text", text: "hello" }] },
     })}\n`;
-    const c1 = importClaudeCodeJsonl(input);
+    const c1 = importClaudeCodeJsonl(input, emptySidecar());
     const msgIndex = c1.findIndex((e) => e.kind === "message.created");
     const original = c1[msgIndex];
     if (!original) throw new Error("missing message.created");
@@ -319,7 +320,7 @@ describe("edge case: actor rich-field cross-provider preservation", () => {
     const codexT = exportCodexJsonl(c2);
     const c3 = importCodexJsonl(codexT);
     const claudeT = exportClaudeCodeJsonl(c3);
-    const final = importClaudeCodeJsonl(claudeT);
+    const final = importClaudeCodeJsonl(claudeT, emptySidecar());
     const msg = final.find((e) => e.kind === "message.created");
     expect(msg?.actor?.agentId).toBe("agent-multi-hop");
   });

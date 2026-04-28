@@ -5,6 +5,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  emptySidecar,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
 import { parseJsonlObjectLines } from "../jsonl";
@@ -47,7 +48,7 @@ describe("edge case: image content blocks", () => {
     }
 
     it("preserves image content block from claude-code user message", () => {
-      const events = importClaudeCodeJsonl(claudeImageInput);
+      const events = importClaudeCodeJsonl(claudeImageInput, emptySidecar());
       const imagePart = findImagePart(events);
       expect(imagePart).toBeDefined();
       if (imagePart?.type !== "image") throw new Error("type narrowing");
@@ -57,9 +58,9 @@ describe("edge case: image content blocks", () => {
 
     for (const { name } of LOSSLESS_CASES) {
       it(`round-trips image block claude → claude (${name})`, () => {
-        const events = importClaudeCodeJsonl(claudeImageInput);
+        const events = importClaudeCodeJsonl(claudeImageInput, emptySidecar());
         const exported = exportClaudeCodeJsonl(events);
-        const reimported = importClaudeCodeJsonl(exported);
+        const reimported = importClaudeCodeJsonl(exported, emptySidecar());
         const imagePart = findImagePart(reimported);
         expect(imagePart).toBeDefined();
         if (imagePart?.type !== "image") throw new Error("type narrowing");
@@ -149,11 +150,11 @@ describe("edge case: image content blocks", () => {
 
     for (const { name } of LOSSLESS_CASES) {
       it(`claude → pi → claude preserves image block (${name})`, () => {
-        const canonical1 = importClaudeCodeJsonl(claudeImageInput);
+        const canonical1 = importClaudeCodeJsonl(claudeImageInput, emptySidecar());
         const piText = exportPiSessionJsonl(canonical1);
         const canonical2 = importPiSessionJsonl(piText);
         const claudeText = exportClaudeCodeJsonl(canonical2);
-        const final = importClaudeCodeJsonl(claudeText);
+        const final = importClaudeCodeJsonl(claudeText, emptySidecar());
         const imagePart = findImagePart(final);
         expect(imagePart).toBeDefined();
         if (imagePart?.type !== "image") throw new Error("type narrowing");
@@ -161,11 +162,11 @@ describe("edge case: image content blocks", () => {
       });
 
       it(`claude → codex → claude preserves image block (${name})`, () => {
-        const canonical1 = importClaudeCodeJsonl(claudeImageInput);
+        const canonical1 = importClaudeCodeJsonl(claudeImageInput, emptySidecar());
         const codexText = exportCodexJsonl(canonical1);
         const canonical2 = importCodexJsonl(codexText);
         const claudeText = exportClaudeCodeJsonl(canonical2);
-        const final = importClaudeCodeJsonl(claudeText);
+        const final = importClaudeCodeJsonl(claudeText, emptySidecar());
         const imagePart = findImagePart(final);
         expect(imagePart).toBeDefined();
         if (imagePart?.type !== "image") throw new Error("type narrowing");
@@ -207,7 +208,7 @@ describe("edge case: image content blocks", () => {
     }
 
     it("codex export uses sidecar metadata instead of output_text JSON fallback for assistant images", () => {
-      const canonical = importClaudeCodeJsonl(claudeAssistantImageInput);
+      const canonical = importClaudeCodeJsonl(claudeAssistantImageInput, emptySidecar());
       const codexText = exportCodexJsonl(canonical);
       const lines = parseJsonlObjectLines(codexText);
       const assistantLine = lines.find(
@@ -233,11 +234,11 @@ describe("edge case: image content blocks", () => {
     });
 
     it("claude assistant image survives claude → codex → claude", () => {
-      const canonical1 = importClaudeCodeJsonl(claudeAssistantImageInput);
+      const canonical1 = importClaudeCodeJsonl(claudeAssistantImageInput, emptySidecar());
       const codexText = exportCodexJsonl(canonical1);
       const canonical2 = importCodexJsonl(codexText);
       const claudeText = exportClaudeCodeJsonl(canonical2);
-      const final = importClaudeCodeJsonl(claudeText);
+      const final = importClaudeCodeJsonl(claudeText, emptySidecar());
       const imagePart = findAssistantImagePart(final);
       expect(imagePart).toBeDefined();
       if (imagePart?.type !== "image") throw new Error("type narrowing");
