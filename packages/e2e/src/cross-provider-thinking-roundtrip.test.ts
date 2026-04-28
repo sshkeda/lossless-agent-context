@@ -2,6 +2,7 @@ import {
   exportCodexJsonl,
   importClaudeCodeJsonl,
   importPiSessionJsonl,
+  type LosslessSidecar,
   prepareClaudeCodeResumeSeed,
 } from "@lossless-agent-context/adapters";
 import { describe, expect, it } from "vitest";
@@ -15,17 +16,19 @@ import { describe, expect, it } from "vitest";
 //
 // That demotion is intentional, but it would silently leak as plain
 // `<thinking>` text into a subsequent codex export if importClaudeCodeJsonl
-// just took the text at face value. The recovery is deterministic: at seed
-// time we stash the original chain-of-thought on the JSONL line wrapper
-// (`losslessAgentContext.demotedReasoning[]`, indexed by contentIndex) — a
-// sibling of `message`, never sent to the claude API. On import we read those
-// markers and re-promote the matching text blocks back to native
-// `reasoning.created` events so the codex export emits a `reasoning` item
-// rather than a plain text message. No regex, no false matches on text that
-// merely contains the substring `<thinking>`.
+// just took the text at face value. The recovery is deterministic AND
+// stays out of Claude Code's parse path: at seed time the original chain-
+// of-thought is recorded in a recovery SIDECAR (see recovery-sidecar.ts)
+// keyed by claude line uuid + contentIndex. The seed JSONL itself stays
+// pristine — pure claude-code format with no custom wrapper fields. On
+// import, the caller passes the sidecar via `importClaudeCodeJsonl(text,
+// { sidecar })` and the importer re-promotes the matching text blocks
+// back to native `reasoning.created` events. No regex, no false matches
+// on text that merely contains the substring `<thinking>`, and no
+// dependence on Claude Code's tolerance for unknown wrapper fields.
 
 describe("cross-provider thinking demotion round-trip", () => {
-  it("recovers a native codex reasoning item when re-importing a claude session that contains demoted <thinking> text", () => {
+  it("recovers a native codex reasoning item via the sidecar when re-importing a claude session", () => {
     const codexReasoningText = "**Plan**: Read the file then act.";
     const piJsonl = [
       { type: "session", version: 3, id: "sess-1", timestamp: "2026-04-21T00:00:00.000Z", cwd: "/tmp" },
@@ -57,12 +60,11 @@ describe("cross-provider thinking demotion round-trip", () => {
     // Step 1: pi session → canonical → claude resume seed (this is what
     // pi-claude-code writes when the user switches from codex to claude).
     const canonicalFromPi = importPiSessionJsonl(piJsonl);
-    const seed = prepareClaudeCodeResumeSeed(canonicalFromPi, "claude-sess-1");
+    const { jsonl: seed, sidecar } = prepareClaudeCodeResumeSeed(canonicalFromPi, "claude-sess-1");
 
     // Sanity: the seed contains the <thinking>-wrapped text but no native
-    // thinking block (because we couldn't sign it). The demotion marker is
-    // recorded on the line wrapper, not inside `message.content`, so claude
-    // never sees it.
+    // thinking block (because we couldn't sign it) AND no custom wrapper
+    // fields (the seed is pristine claude-code format).
     const assistantSeedLines = seed
       .split("\n")
       .filter((l) => l.trim())
@@ -77,14 +79,21 @@ describe("cross-provider thinking demotion round-trip", () => {
     );
     expect(wrappedText).toBeDefined();
     expect(seedAssistantText.some((b: { type?: string }) => b?.type === "thinking")).toBe(false);
-    // The recovery marker rides on the wrapper, NOT in message.content.
-    const recovery = assistantSeedLines[0].losslessAgentContext;
-    expect(recovery).toEqual({ demotedReasoning: [{ contentIndex: 0, originalText: codexReasoningText }] });
+    // The seed JSONL line MUST NOT contain any custom recovery wrapper —
+    // recovery info lives entirely in the sidecar.
+    expect(assistantSeedLines[0].losslessAgentContext).toBeUndefined();
 
-    // Step 2: re-import the claude seed as canonical events. The recovery
+    // The sidecar holds the recovery marker keyed by line uuid.
+    const lineUuid = assistantSeedLines[0].uuid;
+    expect(typeof lineUuid).toBe("string");
+    expect(sidecar.byLineUuid[lineUuid]).toEqual({
+      demotedReasoning: [{ contentIndex: 0, originalText: codexReasoningText }],
+    });
+
+    // Step 2: re-import the claude seed WITH the sidecar. The recovery
     // logic must promote the `<thinking>...</thinking>` text back to a
     // `reasoning.created` event so semantic intent survives.
-    const canonicalFromClaude = importClaudeCodeJsonl(seed);
+    const canonicalFromClaude = importClaudeCodeJsonl(seed, { sidecar });
     const reasoningEvents = canonicalFromClaude.filter((e) => e.kind === "reasoning.created");
     expect(reasoningEvents).toHaveLength(1);
     expect(reasoningEvents[0]?.kind === "reasoning.created" && reasoningEvents[0].payload.text).toBe(codexReasoningText);
@@ -126,14 +135,13 @@ describe("cross-provider thinking demotion round-trip", () => {
     }
   });
 
-  it("does not promote text blocks that lack a recovery marker, even if they contain <thinking> substrings", () => {
-    // Recovery is driven by the `losslessAgentContext.demotedReasoning[]`
-    // marker on the line wrapper, not by pattern-matching the text. A text
-    // block that merely *mentions* `<thinking>` (e.g. the model discussing
-    // the convention itself, or a user pasting an XML-tagged example) must
-    // never be misinterpreted as a demoted reasoning block. This test
-    // exercises BOTH a stray substring and an exact-shape pattern with no
-    // marker — both must be left alone.
+  it("does not promote text blocks when no sidecar is provided, even if they contain <thinking> substrings", () => {
+    // Recovery is driven by the sidecar passed via the importer's options,
+    // not by pattern-matching the JSONL text. A text block that merely
+    // *mentions* `<thinking>` (e.g. the model discussing the convention,
+    // or a user pasting an XML-tagged example) must never be misinterpreted
+    // as a demoted reasoning block — even when the JSONL was not produced
+    // by lac and there's no sidecar to consult.
     const claudeJsonl = [
       { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
       {
@@ -146,7 +154,7 @@ describe("cross-provider thinking demotion round-trip", () => {
           role: "assistant",
           content: [
             { type: "text", text: "I see <thinking>some pattern</thinking> in the docs." },
-            { type: "text", text: "<thinking>\nLooks like a thinking block but no marker exists.\n</thinking>" },
+            { type: "text", text: "<thinking>\nLooks like a thinking block but no sidecar exists.\n</thinking>" },
           ],
         },
       },
@@ -154,6 +162,7 @@ describe("cross-provider thinking demotion round-trip", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
+    // No sidecar passed → no recovery happens.
     const canonical = importClaudeCodeJsonl(claudeJsonl);
     expect(canonical.filter((e) => e.kind === "reasoning.created")).toHaveLength(0);
     const textParts = canonical
@@ -164,11 +173,12 @@ describe("cross-provider thinking demotion round-trip", () => {
     expect(textParts[1]?.type === "text" && textParts[1].text.startsWith("<thinking>\n")).toBe(true);
   });
 
-  it("only promotes the contentIndex listed in the marker, leaving other text blocks alone", () => {
-    // Mixed content: the marker says contentIndex=1 was demoted from a
+  it("only promotes the contentIndex listed in the sidecar marker, leaving other text blocks alone", () => {
+    // Mixed content: the sidecar says contentIndex=1 was demoted from a
     // thinking block. contentIndex=0 (a real assistant statement) and
-    // contentIndex=2 (model legitimately discussing the convention) must NOT
-    // be promoted. Index-based recovery makes this trivially correct.
+    // contentIndex=2 (model legitimately discussing the convention) must
+    // NOT be promoted. Index-based recovery keyed by line uuid makes this
+    // trivially correct.
     const claudeJsonl = [
       { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
       {
@@ -177,11 +187,6 @@ describe("cross-provider thinking demotion round-trip", () => {
         uuid: "u1",
         timestamp: "2026-04-21T00:00:01.000Z",
         sessionId: "orig",
-        losslessAgentContext: {
-          demotedReasoning: [
-            { contentIndex: 1, originalText: "promoted reasoning" },
-          ],
-        },
         message: {
           role: "assistant",
           content: [
@@ -195,7 +200,13 @@ describe("cross-provider thinking demotion round-trip", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const canonical = importClaudeCodeJsonl(claudeJsonl);
+    const sidecar: LosslessSidecar = {
+      byLineUuid: {
+        u1: { demotedReasoning: [{ contentIndex: 1, originalText: "promoted reasoning" }] },
+      },
+    };
+
+    const canonical = importClaudeCodeJsonl(claudeJsonl, { sidecar });
     const reasoningEvents = canonical.filter((e) => e.kind === "reasoning.created");
     expect(reasoningEvents).toHaveLength(1);
     expect(reasoningEvents[0]?.kind === "reasoning.created" && reasoningEvents[0].payload.text).toBe("promoted reasoning");

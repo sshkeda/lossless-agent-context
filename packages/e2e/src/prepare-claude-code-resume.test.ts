@@ -55,8 +55,8 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const firstSeed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
-    const secondSeed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const { jsonl: firstSeed } = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const { jsonl: secondSeed } = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
     const assistantLines = firstSeed
       .split("\n")
       .filter((line) => line.trim())
@@ -129,7 +129,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(claudeJsonl, "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(claudeJsonl, "target-session-id");
     const seedObjects = seed.split("\n").filter((line) => line.trim()).map((line) => JSON.parse(line));
     const contentBlocks = seedObjects.flatMap((obj) => {
       const content = obj.message?.content;
@@ -169,7 +169,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .join("\n") + "\n";
 
     const canonical = importPiSessionJsonl(piJsonl);
-    const seed = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
 
     const seedLines = seed.split("\n").filter((l) => l.trim().length > 0);
     const invalid: Array<{ line: number; block: number }> = [];
@@ -227,7 +227,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .join("\n") + "\n";
 
     const canonical = importPiSessionJsonl(piJsonl);
-    const seed = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
 
     const seedObjs = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     const assistantLines = seedObjs.filter((o) => o.type === "assistant");
@@ -246,7 +246,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .join("\n") + "\n";
 
     // Round-trip through the jsonl overload (claude-code jsonl in, seed jsonl out).
-    const seed = prepareClaudeCodeResumeSeed(claudeJsonl, "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(claudeJsonl, "target-session-id");
 
     const assistantLine = seed
       .split("\n")
@@ -271,7 +271,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "new-sess");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "new-sess");
 
     const assistantLine = seed
       .split("\n")
@@ -318,7 +318,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
     const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     const toolResultLine = seedObjects.find(
       (line) =>
@@ -373,7 +373,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "target-session-id");
     const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     const toolResultLine = seedObjects.find(
       (line) =>
@@ -430,7 +430,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .join("\n") + "\n";
 
     const canonical = importPiSessionJsonl(piJsonl);
-    const seed = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(canonical, "target-session-id");
     const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     const toolResultLine = seedObjects.find(
       (line) =>
@@ -502,7 +502,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(importPiSessionJsonl(piJsonl), "target-session-id");
     const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     const idPattern = /^[a-zA-Z0-9_-]+$/;
 
@@ -540,7 +540,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "target-session-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "target-session-id");
     const seedObjects = seed.split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));
     const idPattern = /^[a-zA-Z0-9_-]+$/;
     const toolUse = seedObjects
@@ -566,7 +566,7 @@ describe("prepareClaudeCodeResumeSeed", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(claudeJsonl, "brand-new-id");
+    const { jsonl: seed } = prepareClaudeCodeResumeSeed(claudeJsonl, "brand-new-id");
     for (const line of seed.split("\n").filter((l) => l.trim())) {
       expect(JSON.parse(line).sessionId).toBe("brand-new-id");
     }

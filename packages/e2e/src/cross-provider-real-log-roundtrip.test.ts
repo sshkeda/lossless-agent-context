@@ -135,12 +135,11 @@ describe("cross-provider real-log round-trip", () => {
       const originalToolPairs = collectToolPairsByCallId(canonicalFromPi);
       const originalMatchedPairs = [...originalToolPairs.calls].filter((id) => originalToolPairs.results.has(id));
 
-      let seed: string;
       let canonicalFromClaude: CanonicalEvent[];
       let codexExport: string;
       try {
-        seed = prepareClaudeCodeResumeSeed(canonicalFromPi, "test-target-session-id");
-        canonicalFromClaude = importClaudeCodeJsonl(seed);
+        const { jsonl: seed, sidecar } = prepareClaudeCodeResumeSeed(canonicalFromPi, "test-target-session-id");
+        canonicalFromClaude = importClaudeCodeJsonl(seed, { sidecar });
         codexExport = exportCodexJsonl(canonicalFromClaude);
       } catch (err) {
         findings.push({ path, issue: `pipeline threw: ${err instanceof Error ? err.message : String(err)}` });

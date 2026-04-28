@@ -1,6 +1,10 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
-import { LOSSLESS_RECOVERY_KEY } from "./defaults";
 import { exportClaudeCodeJsonl } from "./export-claude-code";
+import {
+  emptySidecar,
+  type LosslessSidecar,
+  setDemotedReasoningMarkers,
+} from "./recovery-sidecar";
 import { deterministicUuid } from "./utils";
 
 // Types claude-code's resume loader accepts on its session file. Anything
@@ -53,9 +57,11 @@ function sanitizeClaudeToolUseId(id: string): string {
 // `summary[]` was empty) are dropped because there's no recoverable text —
 // only the encrypted blob existed and that's opaque to claude.
 //
-// If a future API ever lets a non-claude signature pass through, or claude
-// learns to verify foreign signatures, we should remove this demotion and
-// pass thinking blocks natively.
+// To make the inverse direction (claude seed → reimport → codex export)
+// deterministic, the original chain-of-thought text is recorded in the
+// recovery sidecar (see recovery-sidecar.ts) keyed by the line's claude
+// uuid. The seed JSONL itself stays pristine — pure claude-code format
+// with NO custom wrapper fields.
 type DemotedThinkingMarker = {
   contentIndex: number;
   originalText: string;
@@ -122,42 +128,63 @@ function ensureAssistantMessageId(line: Record<string, unknown>, lineIndex: numb
   messageRecord.id = synthesizeClaudeMessageId(line, lineIndex);
 }
 
+export interface PreparedClaudeCodeResume {
+  /**
+   * The pure claude-code JSONL seed — write this to
+   * `~/.claude/projects/<slug>/<sessionId>.jsonl` and hand `<sessionId>` to
+   * claude-code-cli's `resume`. Contains only fields claude-code's session
+   * loader knows about; lac adds no custom wrapper fields.
+   */
+  jsonl: string;
+  /**
+   * Recovery sidecar — write to the canonical sidecar path (see
+   * `sidecarPathForSeedPath` in recovery-sidecar.ts) so that a future
+   * `importClaudeCodeJsonl(text, { sidecar })` can deterministically
+   * restore one-way transforms (e.g. `<thinking>`-text demotions back to
+   * native `reasoning.created` events). Empty-ish sidecars (no markers
+   * for any line) are still safe to write — the importer treats them as
+   * "no recovery info available, fall through".
+   */
+  sidecar: LosslessSidecar;
+}
+
 /**
  * Turns a claude-code JSONL (typically produced by `exportClaudeCodeJsonl`)
- * into a seed file that's safe to hand to claude-code-cli's `resume` flag.
+ * or a canonical event array into a seed file safe for claude-code-cli's
+ * `resume`, plus a recovery sidecar.
  *
- * Two things happen here that `exportClaudeCodeJsonl` deliberately doesn't:
+ * The jsonl half is pristine claude-code format — no custom wrapper fields
+ * or sentinel content. The sidecar half carries lac's recovery markers
+ * keyed by claude line uuid, in a separate file outside Claude Code's
+ * parse path entirely. This is the "mark, don't infer" pattern applied to
+ * one-way cross-format transforms (see AGENTS.md).
  *
- * 1. **sessionId rewrite**: the seed needs to be addressed to whatever sessionId
- *    the caller is about to pass as `resume`; all lines get that id stamped on.
+ * Five things happen here that `exportClaudeCodeJsonl` deliberately doesn't:
  *
- * 2. **thinking-signature guard**: claude's API rejects any assistant message
- *    containing `{type: "thinking"}` without a non-empty `signature`. This
- *    comes up in two ways:
- *
- *    - Cross-provider conversations: e.g. openai-codex reasoning blocks
- *      imported via `importPiSessionJsonl` carry an OpenAI-format `thinkingSignature`
- *      but never a claude signature. Exporting them yields thinking blocks with
- *      no signature at all.
- *    - Canonical events that lost their `native.raw` passthrough (e.g. events
- *      re-derived from another format) can't reconstruct a claude signature
- *      even if one originally existed.
- *
- *    In both cases the only recoverable action is to drop the thinking block.
- *    Thinking is model-internal — historical thinking isn't needed for claude
- *    to reconstruct conversational context. If dropping the thinking leaves
- *    an assistant line with empty content, the whole line is dropped too.
+ * 1. **sessionId rewrite**: every line gets the target sessionId stamped on.
+ * 2. **type filter**: lines with types outside CLAUDE_ACCEPTED_TYPES are
+ *    dropped (claude-code rejects unknown types).
+ * 3. **thinking-signature guard**: assistant thinking blocks without a
+ *    valid claude signature are demoted to `<thinking>`-wrapped text and
+ *    recorded in the sidecar for deterministic restoration.
+ * 4. **tool_result legacy field strip**: `structuredContent` (a removed
+ *    field) is stripped to avoid claude API rejection.
+ * 5. **tool id sanitization**: `tool_use.id` and `tool_result.tool_use_id`
+ *    are forced to match claude's `^[a-zA-Z0-9_-]+$`. Cross-provider
+ *    codex IDs containing `|` are rewritten deterministically so paired
+ *    blocks land on the same sanitized id.
  *
  * Overloads:
  *   prepareClaudeCodeResumeSeed(events, sessionId)  // convenience: runs export internally
  *   prepareClaudeCodeResumeSeed(jsonl, sessionId)   // for callers that already exported
  */
-export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[], sessionId: string): string;
-export function prepareClaudeCodeResumeSeed(input: string, sessionId: string): string;
-export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, sessionId: string): string {
+export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[], sessionId: string): PreparedClaudeCodeResume;
+export function prepareClaudeCodeResumeSeed(input: string, sessionId: string): PreparedClaudeCodeResume;
+export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, sessionId: string): PreparedClaudeCodeResume {
   const jsonl = typeof input === "string" ? input : exportClaudeCodeJsonl(input);
   const lines = jsonl.split("\n").filter((line) => line.trim().length > 0);
   const kept: Record<string, unknown>[] = [];
+  const sidecar = emptySidecar();
   for (const [lineIndex, line] of lines.entries()) {
     let obj: Record<string, unknown>;
     try {
@@ -180,21 +207,12 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
           if (transformed.length === 0) continue;
           messageRecord.content = transformed;
           sanitizeClaudeToolUseIds(transformed);
-          if (demoted.length > 0) {
-            // Stash the recovery markers on the JSONL line wrapper (a sibling
-            // of `message`, NOT inside it). Claude Code's API forwards only
-            // `message.content` to claude — the wrapper is session-only — so
-            // the markers ride along the seed without affecting what claude
-            // sees. importClaudeCodeJsonl reads them back to deterministically
-            // promote the matching text blocks back to `reasoning.created`
-            // events for downstream codex export. No regex / pattern-matching.
-            const existing = obj[LOSSLESS_RECOVERY_KEY];
-            const wrapper =
-              existing && typeof existing === "object" && !Array.isArray(existing)
-                ? { ...(existing as Record<string, unknown>) }
-                : {};
-            wrapper.demotedReasoning = demoted;
-            obj[LOSSLESS_RECOVERY_KEY] = wrapper;
+          if (demoted.length > 0 && typeof obj.uuid === "string") {
+            // Record the demotion in the sidecar, keyed by claude line uuid
+            // (stable across resumes). importClaudeCodeJsonl reads the
+            // sidecar and uses the contentIndex to deterministically
+            // promote the matching text block back to a reasoning event.
+            setDemotedReasoningMarkers(sidecar, obj.uuid, demoted);
           }
         }
         ensureAssistantMessageId(obj, lineIndex);
@@ -213,5 +231,6 @@ export function prepareClaudeCodeResumeSeed(input: CanonicalEvent[] | string, se
     obj.sessionId = sessionId;
     kept.push(obj);
   }
-  return kept.length > 0 ? `${kept.map((obj) => JSON.stringify(obj)).join("\n")}\n` : "";
+  const seedJsonl = kept.length > 0 ? `${kept.map((obj) => JSON.stringify(obj)).join("\n")}\n` : "";
+  return { jsonl: seedJsonl, sidecar };
 }

@@ -87,7 +87,7 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // signature any more (it never could; codex doesn't mint claude HMACs),
     // so the seed prep treats it as foreign-unsigned and demotes it to
     // `<thinking>...</thinking>` text with a recovery marker.
-    const seed = prepareClaudeCodeResumeSeed(canonicalFromCodex, "target-claude-sess");
+    const { jsonl: seed, sidecar } = prepareClaudeCodeResumeSeed(canonicalFromCodex, "target-claude-sess");
 
     // Property A — STRICT: the reasoning round-trips as a NATIVE signed
     // thinking block. lac preserves the original claude signature in the
@@ -130,7 +130,10 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // Property B: re-importing this seed back through lac restores a
     // reasoning event with the original text — closes the loop. A future
     // codex re-export would reproduce a native reasoning item again.
-    const canonicalFromSeed = importClaudeCodeJsonl(seed);
+    // Pass the sidecar so the re-import has access to any recovery markers
+    // (here there shouldn't be any since the signature path was native,
+    // but we always pass the sidecar for completeness).
+    const canonicalFromSeed = importClaudeCodeJsonl(seed, { sidecar });
     const reasoningTextsAfterReimport = canonicalFromSeed
       .filter((e): e is Extract<typeof e, { kind: "reasoning.created" }> => e.kind === "reasoning.created")
       .map((e) => e.payload.text);
@@ -177,7 +180,7 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
       .map((obj) => JSON.stringify(obj))
       .join("\n") + "\n";
 
-    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "fallback-target");
+    const { jsonl: seed, sidecar } = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "fallback-target");
     const seedAssistantLines = seed
       .split("\n")
       .filter((l) => l.trim())
@@ -197,16 +200,22 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     );
     expect(thinkingTextBlocks).toHaveLength(1);
 
-    // Recovery marker on the wrapper, indexed by the SAME contentIndex so
-    // re-import is deterministic. This is the core "mark, don't infer"
-    // invariant — the marker IS the contract; without it, the re-import
-    // can't restore the reasoning event without falling back to fragile
-    // pattern-matching.
-    const marker = line.losslessAgentContext?.demotedReasoning?.[0];
-    expect(marker).toEqual({ contentIndex: 0, originalText: reasoningText });
+    // Recovery marker in the SIDECAR (NOT on the JSONL line wrapper),
+    // indexed by line uuid + contentIndex so re-import is deterministic.
+    // This is the core "mark, don't infer" invariant — the marker IS the
+    // contract; without it, the re-import can't restore the reasoning
+    // event without falling back to fragile pattern-matching. The seed
+    // JSONL itself stays pristine claude-code format.
+    expect(line.losslessAgentContext).toBeUndefined();
+    const lineUuid = line.uuid;
+    expect(typeof lineUuid).toBe("string");
+    expect(sidecar.byLineUuid[lineUuid]?.demotedReasoning?.[0]).toEqual({
+      contentIndex: 0,
+      originalText: reasoningText,
+    });
 
-    // Re-import must restore the reasoning event using the marker.
-    const canonical = importClaudeCodeJsonl(seed);
+    // Re-import must restore the reasoning event using the sidecar marker.
+    const canonical = importClaudeCodeJsonl(seed, { sidecar });
     const reasoning = canonical.filter((e) => e.kind === "reasoning.created");
     expect(reasoning).toHaveLength(1);
     expect(reasoning[0]?.kind === "reasoning.created" && reasoning[0].payload.text).toBe(reasoningText);
@@ -240,13 +249,14 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     const codex1 = exportCodexJsonl(canonical1);
     // Hop 2: codex → claude (via prepareClaudeCodeResumeSeed)
     const canonical2 = importCodexJsonl(codex1);
-    const claudeSeed = prepareClaudeCodeResumeSeed(canonical2, "round-trip-1");
-    // Hop 3: claude (the seed) → codex
-    const canonical3 = importClaudeCodeJsonl(claudeSeed);
+    const { jsonl: claudeSeed, sidecar: sidecar1 } = prepareClaudeCodeResumeSeed(canonical2, "round-trip-1");
+    // Hop 3: claude (the seed) → codex. Pass the sidecar through so any
+    // demoted-reasoning markers from hop 2 are honored on this re-import.
+    const canonical3 = importClaudeCodeJsonl(claudeSeed, { sidecar: sidecar1 });
     const codex2 = exportCodexJsonl(canonical3);
     // Hop 4: codex → claude (via seed prep again)
     const canonical4 = importCodexJsonl(codex2);
-    const finalClaudeSeed = prepareClaudeCodeResumeSeed(canonical4, "round-trip-2");
+    const { jsonl: finalClaudeSeed } = prepareClaudeCodeResumeSeed(canonical4, "round-trip-2");
 
     // STRICT: across all 4 hops, the reasoning rides as native signed
     // thinking (signature preserved through every codex hop via lac

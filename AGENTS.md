@@ -22,20 +22,26 @@ thinking) but you need to reverse it on a later import, **mark the change at
 the moment you make it** instead of trying to detect it later from the
 content shape.
 
-- Stash the recovery information on the JSONL line wrapper (a sibling of
-  `message`, which the API never sees), not inside the API message body.
-  The provider strips/ignores wrapper fields; lac reads them back.
-- Use the existing `losslessAgentContext` namespace for new wrapper markers
-  (see `LOSSLESS_RECOVERY_KEY` in `defaults.ts`). Each marker lists the
-  exact `contentIndex` (or other deterministic key) it applies to, plus the
-  original payload needed for reversal. Index-based recovery is exact —
-  zero false positives on text that merely *resembles* the demoted shape.
+- Stash the recovery information in a SIDECAR file alongside the JSONL,
+  NOT in any field on the JSONL itself. The sidecar lives outside the
+  downstream provider's parse path entirely (e.g. `<seed>.jsonl.lossless.json`
+  next to `<seed>.jsonl`), so there's zero dependence on the provider's
+  tolerance for unknown fields.
+- Use the typed helpers in `recovery-sidecar.ts` (`setDemotedReasoningMarkers`,
+  `readDemotedReasoningByContentIndex`, etc.) to read/write markers — every
+  new marker kind goes through that module so the central `LosslessSidecar`
+  contract reflects every recovery shape lac depends on. TypeScript surfaces
+  any mismatch between producer and consumer at compile time.
+- Each marker lists the exact `contentIndex` (or other deterministic key)
+  it applies to, plus the original payload needed for reversal. Index-based
+  recovery is exact — zero false positives on text that merely *resembles*
+  the demoted shape.
 - Never rely on regex / sentinel strings / pattern-matching content to
   recover one-way transforms. A model legitimately discussing the convention
   ("here's how `<thinking>` tags work...") must not get misclassified.
 - The same rule applies upstream: if you must drop or transform something
   that another provider's importer will need, write the drop/transform fact
-  into the wrapper so the round-trip back is deterministic instead of
+  into the sidecar so the round-trip back is deterministic instead of
   guessed.
 
 This is the lac-side half of the broader principle "don't infer whether a

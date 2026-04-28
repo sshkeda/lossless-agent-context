@@ -5,7 +5,8 @@ import {
   isForeignLine,
   readCanonicalOverrides,
 } from "./cross-provider";
-import { CLAUDE_CODE_IDS_EXTENSION, LOSSLESS_RECOVERY_KEY } from "./defaults";
+import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
+import { type LosslessSidecar, readDemotedReasoningByContentIndex } from "./recovery-sidecar";
 import {
   createEvent,
   DEFAULT_BRANCH_ID,
@@ -22,30 +23,14 @@ import { projectClaudeToolCallToPi } from "./tool-projections";
 type Extensions = Record<string, unknown> | undefined;
 const TOOL_RESULT_DETAILS_KEY = "lossless-agent-context/toolResultDetails";
 
-// Reads the lac recovery markers stashed on a claude-code session JSONL line
-// (a sibling of `message`, NOT inside the API message body). Currently the
-// only marker is `demotedReasoning`, which records which `text` blocks in the
-// assistant content[] array were promoted-from-foreign-thinking by
-// prepareClaudeCodeResumeSeed. We use this to deterministically restore the
-// original `reasoning.created` event on import — no regex, no false matches
-// on text that merely contains `<thinking>` substrings. See the HACK note in
-// prepare-claude-code-resume.ts for why the demotion exists in the first
-// place (claude requires a claude-minted signature on every thinking block).
-function readDemotedReasoningByContentIndex(line: Record<string, unknown>): Map<number, string> {
-  const wrapper = line[LOSSLESS_RECOVERY_KEY];
-  if (!wrapper || typeof wrapper !== "object" || Array.isArray(wrapper)) return new Map();
-  const list = (wrapper as Record<string, unknown>).demotedReasoning;
-  if (!Array.isArray(list)) return new Map();
-  const result = new Map<number, string>();
-  for (const entry of list) {
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
-    const record = entry as Record<string, unknown>;
-    if (typeof record.contentIndex === "number" && typeof record.originalText === "string") {
-      result.set(record.contentIndex, record.originalText);
-    }
-  }
-  return result;
-}
+// Recovery markers for one-way cross-format transforms (e.g. demoting
+// foreign-unsigned thinking to `<thinking>`-wrapped text) live in a
+// SIDECAR file outside the JSONL — see recovery-sidecar.ts. The lookup
+// helper there takes a parsed sidecar plus a line uuid and returns the
+// markers for that line. We pass the sidecar in via the importer's
+// options parameter; callers without a sidecar (e.g. importing a
+// claude-code session that wasn't produced by lac) get a no-op recovery
+// path and the importer falls through to default handling.
 type ResolvedClaudeLineTimestamp = {
   synthetic: boolean;
   value: string;
@@ -221,10 +206,22 @@ function toolResultDetailsFromClaudeRecord(
   return { structuredToolResultDetails: structured, ...editDetails };
 }
 
-export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
+export interface ImportClaudeCodeOptions {
+  /**
+   * Optional recovery sidecar parsed from the seed's `<jsonl>.lossless.json`.
+   * If provided, the importer reads markers keyed by claude line uuid and
+   * applies them deterministically (e.g. promoting demoted-thinking text
+   * blocks back to `reasoning.created` events). Omit when the JSONL was
+   * not produced by lac — the importer falls through to default handling.
+   */
+  sidecar?: LosslessSidecar;
+}
+
+export function importClaudeCodeJsonl(text: string, options?: ImportClaudeCodeOptions): CanonicalEvent[] {
   const entries = parseJsonlWithText(text);
   const lines = entries.map((entry) => entry.line);
   const events: CanonicalEvent[] = [];
+  const sidecar = options?.sidecar;
 
   const firstNativeLine = lines.find((line) => !isForeignLine(line) && typeof line.sessionId === "string");
   let currentSessionId =
@@ -421,7 +418,10 @@ export function importClaudeCodeJsonl(text: string): CanonicalEvent[] {
           const message = line.message as Record<string, unknown> | undefined;
           const content = Array.isArray(message?.content) ? message?.content : [];
           const cache = cacheFromClaudeMessage(message);
-          const demotedReasoningByIndex = readDemotedReasoningByContentIndex(line);
+          const demotedReasoningByIndex = readDemotedReasoningByContentIndex(
+            sidecar,
+            typeof line.uuid === "string" ? line.uuid : undefined,
+          );
 
           for (const [partIndex, part] of content.entries()) {
             if (!part || typeof part !== "object") continue;
