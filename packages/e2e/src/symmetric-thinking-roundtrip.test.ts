@@ -89,17 +89,16 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     // `<thinking>...</thinking>` text with a recovery marker.
     const seed = prepareClaudeCodeResumeSeed(canonicalFromCodex, "target-claude-sess");
 
-    // Property A: the reasoning TEXT still appears in the seed via SOME
-    // path. Two valid outcomes:
-    //   (i)  native signed thinking: claude signature was preserved through
-    //        the codex hop via lac extensions and re-attached on export.
-    //   (ii) demoted to `<thinking>...</thinking>` text with a recovery
-    //        marker on the wrapper.
-    // Either outcome keeps the user-visible chain-of-thought; we assert
-    // SOME path landed it in the seed.
-    let reasoningSurvivedAsThinking = false;
-    let reasoningSurvivedAsDemotedText = false;
-    let demotedTextHasRecoveryMarker = false;
+    // Property A — STRICT: the reasoning round-trips as a NATIVE signed
+    // thinking block. lac preserves the original claude signature in the
+    // canonical event's extensions and re-attaches it when exporting back
+    // to claude, so the round-trip should never fall back to the demote-
+    // to-text path. If this assertion ever flips to false, lac silently
+    // stopped preserving the signature — that's a real regression in
+    // determinism (we'd be relying on the noisier text-demotion path
+    // when the cleaner native path was previously available).
+    let nativeThinking: { signature: unknown; thinking: string } | undefined;
+    let demotedText: { contentIndex: number } | undefined;
     for (const line of seed.split("\n").filter((l) => l.trim())) {
       const obj = JSON.parse(line);
       if (obj.type !== "assistant") continue;
@@ -107,33 +106,26 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
       if (!Array.isArray(content)) continue;
       for (const [contentIndex, block] of content.entries()) {
         if (block?.type === "thinking" && typeof block.thinking === "string" && block.thinking.includes(claudeReasoningText)) {
-          // (i) Native thinking. Must carry a non-empty signature or
-          // claude's API will reject the resume.
-          expect(typeof block.signature === "string" && block.signature.length > 0, "native thinking block must have a signature").toBe(true);
-          reasoningSurvivedAsThinking = true;
+          nativeThinking = { signature: block.signature, thinking: block.thinking };
         }
         if (block?.type === "text" && typeof block.text === "string" && block.text.includes(claudeReasoningText)) {
-          reasoningSurvivedAsDemotedText = true;
-          // (ii) Demoted text. Must have a recovery marker on the wrapper
-          // pointing at this contentIndex so a future codex re-export can
-          // restore the native reasoning item.
-          const markers = obj.losslessAgentContext?.demotedReasoning ?? [];
-          if (markers.some((m: { contentIndex: number; originalText: string }) => m.contentIndex === contentIndex && m.originalText === claudeReasoningText)) {
-            demotedTextHasRecoveryMarker = true;
-          }
+          demotedText = { contentIndex };
         }
       }
     }
     expect(
-      reasoningSurvivedAsThinking || reasoningSurvivedAsDemotedText,
-      "claude reasoning text was lost across codex hop — neither native thinking nor demoted text survived",
+      nativeThinking,
+      "claude signature was NOT preserved across the codex hop — reasoning fell back to the noisier demote-to-text path. " +
+        "Investigate canonical event extensions / lac signature passthrough.",
+    ).toBeDefined();
+    expect(
+      typeof nativeThinking?.signature === "string" && (nativeThinking.signature as string).length > 0,
+      "native thinking block must carry a non-empty signature or claude's API will reject the resume",
     ).toBe(true);
-    if (reasoningSurvivedAsDemotedText && !reasoningSurvivedAsThinking) {
-      // If we took the demote path we also need the recovery marker to make
-      // a future hop back to codex deterministic. (If signature survived,
-      // no marker needed — the signed thinking round-trips natively.)
-      expect(demotedTextHasRecoveryMarker, "demoted reasoning text is missing its recovery marker on the wrapper").toBe(true);
-    }
+    expect(
+      demotedText,
+      "reasoning text appeared as both native thinking AND demoted text — we have duplication, not a clean round-trip",
+    ).toBeUndefined();
 
     // Property B: re-importing this seed back through lac restores a
     // reasoning event with the original text — closes the loop. A future
@@ -153,6 +145,71 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
       .filter((p): p is Extract<typeof p, { type: "text" }> => p.type === "text")
       .map((p) => p.text);
     expect(allAssistantText).toContain("Here's the answer.");
+  });
+
+  it("falls back deterministically to demote-to-text when no signature is available", () => {
+    // Direct fallback test: hand prepareClaudeCodeResumeSeed a claude jsonl
+    // line whose thinking block has NO signature (this is exactly what a
+    // future codex round-trip would produce if lac stopped preserving the
+    // signature, OR what an in-the-wild jsonl from a non-lac source might
+    // already contain). The seed prep MUST take the demote path, AND that
+    // path MUST be deterministic — text wrapped in `<thinking>` tags AND
+    // a recovery marker on the wrapper so a future re-export deterministically
+    // reproduces the reasoning event.
+    const reasoningText = "Pretend the signature is missing.";
+    const malformedClaudeJsonl = [
+      { type: "system", subtype: "init", uuid: "u0", parentUuid: null, timestamp: "2026-04-21T00:00:00.000Z", sessionId: "orig", cwd: "/tmp" },
+      {
+        type: "assistant",
+        parentUuid: "u0",
+        uuid: "u1",
+        timestamp: "2026-04-21T00:00:01.000Z",
+        sessionId: "orig",
+        message: {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: reasoningText },
+            { type: "text", text: "ok" },
+          ],
+        },
+      },
+    ]
+      .map((obj) => JSON.stringify(obj))
+      .join("\n") + "\n";
+
+    const seed = prepareClaudeCodeResumeSeed(malformedClaudeJsonl, "fallback-target");
+    const seedAssistantLines = seed
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => JSON.parse(l))
+      .filter((o) => o.type === "assistant");
+    expect(seedAssistantLines).toHaveLength(1);
+    const line = seedAssistantLines[0];
+    const content = line.message?.content ?? [];
+
+    // No native thinking blocks survive (claude API would reject unsigned).
+    expect(content.some((b: { type?: string }) => b?.type === "thinking")).toBe(false);
+
+    // A `<thinking>`-wrapped text block at a known content index:
+    const thinkingTextBlocks = content.filter(
+      (b: { type?: string; text?: string }) =>
+        b?.type === "text" && typeof b.text === "string" && b.text === `<thinking>\n${reasoningText}\n</thinking>`,
+    );
+    expect(thinkingTextBlocks).toHaveLength(1);
+
+    // Recovery marker on the wrapper, indexed by the SAME contentIndex so
+    // re-import is deterministic. This is the core "mark, don't infer"
+    // invariant — the marker IS the contract; without it, the re-import
+    // can't restore the reasoning event without falling back to fragile
+    // pattern-matching.
+    const marker = line.losslessAgentContext?.demotedReasoning?.[0];
+    expect(marker).toEqual({ contentIndex: 0, originalText: reasoningText });
+
+    // Re-import must restore the reasoning event using the marker.
+    const canonical = importClaudeCodeJsonl(seed);
+    const reasoning = canonical.filter((e) => e.kind === "reasoning.created");
+    expect(reasoning).toHaveLength(1);
+    expect(reasoning[0]?.kind === "reasoning.created" && reasoning[0].payload.text).toBe(reasoningText);
   });
 
   it("preserves text across a deeper claude → codex → claude → codex round-trip", () => {
@@ -191,27 +248,32 @@ describe("symmetric claude → codex → claude thinking round-trip", () => {
     const canonical4 = importCodexJsonl(codex2);
     const finalClaudeSeed = prepareClaudeCodeResumeSeed(canonical4, "round-trip-2");
 
-    // The reasoning text should still be present at the end of the chain
-    // via SOME path (native thinking with signature OR demoted text with
-    // recovery marker OR raw `<thinking>`-wrapped text).
-    let foundInFinalSeed = false;
+    // STRICT: across all 4 hops, the reasoning rides as native signed
+    // thinking (signature preserved through every codex hop via lac
+    // extensions). It must NEVER fall back to the demote-to-text path
+    // here — these fixtures all start with a valid signature, so any
+    // appearance of `<thinking>`-wrapped text would mean lac dropped the
+    // signature somewhere in the chain.
+    let nativeThinkingFound = false;
+    let demotedTextFound = false;
     for (const line of finalClaudeSeed.split("\n").filter((l) => l.trim())) {
       const obj = JSON.parse(line);
       if (obj.type !== "assistant") continue;
       const content = obj.message?.content ?? [];
       for (const block of content) {
         if (block?.type === "thinking" && typeof block.thinking === "string" && block.thinking.includes(claudeReasoningText)) {
-          foundInFinalSeed = true;
+          nativeThinkingFound = true;
+          expect(typeof block.signature === "string" && (block.signature as string).length > 0, "thinking block must carry a signature").toBe(true);
         }
         if (block?.type === "text" && typeof block.text === "string" && block.text.includes(claudeReasoningText)) {
-          foundInFinalSeed = true;
+          demotedTextFound = true;
         }
       }
-      const recovery = obj.losslessAgentContext?.demotedReasoning ?? [];
-      if (recovery.some((m: { originalText: string }) => m.originalText === claudeReasoningText)) {
-        foundInFinalSeed = true;
-      }
     }
-    expect(foundInFinalSeed, "claude reasoning text was lost across a 4-hop round-trip").toBe(true);
+    expect(nativeThinkingFound, "claude reasoning text was lost across a 4-hop round-trip").toBe(true);
+    expect(
+      demotedTextFound,
+      "reasoning fell back to the demote-to-text path during the 4-hop round-trip — signature was dropped somewhere in the chain",
+    ).toBe(false);
   });
 });
