@@ -96,7 +96,10 @@ function sanitizeClaudeToolUseId(id: string): string {
 // text block wrapped as historical cross-provider reasoning. Claude reads this
 // as part of the historical assistant turn — not as signed native reasoning —
 // so the reasoning survives the resume and informs the next turn without using
-// the overloaded `<thinking>` tag.
+// the overloaded `<thinking>` tag. This is intentionally a compatibility
+// fallback: preserve cross-provider reasoning when native Claude reasoning is
+// impossible, while making it visible text rather than pretending we minted a
+// valid Claude thinking block.
 //
 // Empty/whitespace-only thinking blocks (codex reasoning items whose
 // `summary[]` was empty) are dropped because there's no recoverable text —
