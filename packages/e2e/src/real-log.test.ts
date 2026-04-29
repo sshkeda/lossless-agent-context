@@ -7,6 +7,7 @@ import {
   importClaudeCodeJsonl,
   importCodexJsonl,
   importPiSessionJsonl,
+  prepareClaudeCodeResumeSeed,
 } from "@lossless-agent-context/adapters";
 import { type CanonicalEvent, canonicalEventSchema } from "@lossless-agent-context/core";
 import { buildSessionContext, parseSessionEntries, type SessionEntry } from "@mariozechner/pi-coding-agent";
@@ -108,6 +109,27 @@ function findLastAssistantText(events: CanonicalEvent[]): string | undefined {
   return undefined;
 }
 
+function compactJsonl(text: string): string {
+  const lines = text
+    .split("\n")
+    .filter((line) => line.trim().length > 0)
+    .map((line) => JSON.stringify(JSON.parse(line)));
+  return lines.length > 0 ? `${lines.join("\n")}\n` : "";
+}
+
+function firstSessionId(text: string): string | undefined {
+  for (const line of text.split("\n")) {
+    if (line.trim().length === 0) continue;
+    try {
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (typeof parsed.sessionId === "string") return parsed.sessionId;
+    } catch {
+      // keep scanning; real logs may include partial/corrupt trailing lines
+    }
+  }
+  return undefined;
+}
+
 function validateNativeText(provider: ProviderName, text: string, label: string): void {
   if (provider === "pi") {
     const entries = parseSessionEntries(text);
@@ -175,6 +197,23 @@ describe("real local log e2e", () => {
       }
     });
   }
+
+  it("recent real Claude logs rebuild byte-identically through prepareClaudeCodeResumeSeed", () => {
+    const claudeCase = realLogCases.find((testCase) => testCase.name === "claude-code");
+    if (!claudeCase) throw new Error("missing claude-code real log case");
+    const paths = pathsForCase(claudeCase);
+    expect(paths.length, "expected at least one recent claude-code session log").toBeGreaterThan(0);
+
+    for (const path of paths) {
+      expect(existsSync(path), `${path} must exist`).toBe(true);
+      const originalText = readFileSync(path, "utf8");
+      const sessionId = firstSessionId(originalText);
+      expect(sessionId, `${path} must contain a native sessionId`).toBeTruthy();
+      const canonical = importClaudeCodeJsonl(originalText, emptySidecar());
+      const prepared = prepareClaudeCodeResumeSeed(canonical, sessionId as string);
+      expect(prepared.jsonl, `${path} must rebuild exactly as a Claude resume seed`).toBe(compactJsonl(originalText));
+    }
+  });
 
   for (const chain of threeHopChains) {
     it(`up to three recent real ${chain.source} logs survive ${chain.source} -> ${chain.path.join(" -> ")} with target-native validation at each hop`, async () => {
