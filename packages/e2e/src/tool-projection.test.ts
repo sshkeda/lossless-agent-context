@@ -314,6 +314,38 @@ const CLAUDE_EDIT_FIXTURE = [
   .map((line) => JSON.stringify(line))
   .join("\n");
 
+const CLAUDE_GLOB_FIXTURE = [
+  {
+    type: "system",
+    subtype: "init",
+    timestamp: "2026-04-20T02:25:00.000Z",
+    sessionId: "claude-tool-projection-glob",
+    cwd: "/tmp/lossless-agent-context",
+  },
+  {
+    type: "assistant",
+    timestamp: "2026-04-20T02:25:01.000Z",
+    sessionId: "claude-tool-projection-glob",
+    cwd: "/tmp/lossless-agent-context",
+    message: {
+      role: "assistant",
+      content: [
+        {
+          type: "tool_use",
+          id: "call_claude_glob_1",
+          name: "Glob",
+          input: {
+            pattern: "**/*.ts",
+            path: "src",
+          },
+        },
+      ],
+    },
+  },
+]
+  .map((line) => JSON.stringify(line))
+  .join("\n");
+
 describe("Claude native tool projections", () => {
   it("projects Pi read to Claude Read while preserving the original canonical tool call and tool result", () => {
     const canonical = importPiSessionJsonl(PI_READ_FIXTURE);
@@ -471,6 +503,17 @@ describe("Claude native tool projections", () => {
           { oldText: "old-b", newText: "new-b" },
         ],
       },
+    });
+  });
+
+  it("normalizes native Claude Glob calls back into Pi find arguments", () => {
+    const canonical = importClaudeCodeJsonl(CLAUDE_GLOB_FIXTURE, emptySidecar());
+    const toolCall = canonical.find((event) => event.kind === "tool.call");
+
+    expect(toolCall?.kind === "tool.call" ? toolCall.payload.name : undefined).toBe("find");
+    expect(toolCall?.kind === "tool.call" ? toolCall.payload.arguments : undefined).toEqual({
+      pattern: "**/*.ts",
+      path: "src",
     });
   });
 

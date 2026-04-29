@@ -193,7 +193,10 @@ function normalizeClaudeGrep(args: JsonRecord | undefined): JsonRecord | undefin
 function normalizeClaudeGlob(args: JsonRecord | undefined): JsonRecord | undefined {
   const pattern = readString(args, "pattern");
   if (!pattern) return undefined;
-  return { pattern };
+  return withDefinedFields({ pattern }, [
+    ["path", readString(args, "path")],
+    ["limit", readNumber(args, "limit")],
+  ]);
 }
 
 function normalizeClaudeLs(args: JsonRecord | undefined): JsonRecord | undefined {
@@ -260,7 +263,7 @@ const CLAUDE_TO_PI_TOOL_PROJECTION_RULES: Record<string, ReverseToolProjectionRu
     buildArguments: (args) => normalizeClaudeGrep(args),
   },
   Glob: {
-    targetName: "glob",
+    targetName: "find",
     buildArguments: (args) => normalizeClaudeGlob(args),
   },
   LS: {
