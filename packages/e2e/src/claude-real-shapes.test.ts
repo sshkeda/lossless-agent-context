@@ -1,4 +1,4 @@
-import { emptySidecar, importClaudeCodeJsonl } from "@lossless-agent-context/adapters";
+import { emptySidecar, importClaudeCodeJsonl, prepareClaudeCodeResumeSeed } from "@lossless-agent-context/adapters";
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { describe, expect, it } from "vitest";
 import { readFixture } from "./fixtures";
@@ -35,6 +35,27 @@ describe("Claude real native shape corpus", () => {
         expect(typeof line.uuid).toBe("string");
         expect(typeof (line.message as Record<string, unknown> | undefined)?.role).toBe("string");
       }
+    }
+  });
+
+  it("round-trips each harvested single-session Claude native transcript byte-for-byte through LAC resume prep", () => {
+    const fixtureText = readFixture("claude-real-shapes.jsonl");
+    const sessions = new Map<string, string[]>();
+    for (const line of fixtureText.split("\n")) {
+      if (line.trim().length === 0) continue;
+      const parsed = jsonRecord.parse(JSON.parse(line));
+      if (typeof parsed.sessionId !== "string") continue;
+      const lines = sessions.get(parsed.sessionId) ?? [];
+      lines.push(line);
+      sessions.set(parsed.sessionId, lines);
+    }
+
+    expect(sessions.size).toBeGreaterThanOrEqual(4);
+    for (const [sessionId, lines] of sessions) {
+      const nativeJsonl = `${lines.join("\n")}\n`;
+      const canonical = importClaudeCodeJsonl(nativeJsonl, emptySidecar());
+      const prepared = prepareClaudeCodeResumeSeed(canonical, sessionId);
+      expect(prepared.jsonl, `session ${sessionId} must rebuild exactly`).toBe(nativeJsonl);
     }
   });
 
