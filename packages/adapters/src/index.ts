@@ -3,6 +3,7 @@ export { exportClaudeCodeJsonl } from "./export-claude-code";
 export { exportCodexJsonl } from "./export-codex";
 export { exportPiSessionJsonl } from "./export-pi";
 export { importClaudeCodeJsonl } from "./import-claude-code";
+export { scanClaudeCodeJsonl, type ClaudeCodeJsonlScan, type ClaudeCodeNativeCompaction, type ClaudeCodePromptUsageSample } from "./scan-claude-code-jsonl";
 export { importCodexJsonl } from "./import-codex";
 export { importPiSessionJsonl } from "./import-pi";
 export { type PreparedClaudeCodeResume, prepareClaudeCodeResumeSeed } from "./prepare-claude-code-resume";
