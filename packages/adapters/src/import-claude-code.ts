@@ -8,7 +8,12 @@ import {
   readCanonicalOverrides,
 } from "./cross-provider";
 import { CLAUDE_CODE_IDS_EXTENSION } from "./defaults";
-import { type LosslessSidecar, readDemotedReasoningByContentIndex, readLineMetadata } from "./recovery-sidecar";
+import {
+  type LosslessSidecar,
+  readDemotedReasoningByContentIndex,
+  readEmptyTextSubstitutionsByContentIndex,
+  readLineMetadata,
+} from "./recovery-sidecar";
 import { projectClaudeToolCallToPi } from "./tool-projections";
 import {
   createEvent,
@@ -310,14 +315,21 @@ export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): C
         case "user": {
           const message = line.message as Record<string, unknown> | undefined;
           const content = message?.content;
+          const emptyTextSubs = readEmptyTextSubstitutionsByContentIndex(
+            sidecar,
+            typeof line.uuid === "string" ? line.uuid : undefined,
+          );
           if (typeof content === "string") {
+            // Restore empty string if the sidecar says this was an
+            // empty-text substitution (wholeContent bare-string case).
+            const restoredText = emptyTextSubs.get(0)?.wholeContent ? "" : content;
             createEvent(events, {
               sessionId,
               branchId,
               timestamp: lineTimestamp,
               kind: "message.created",
               actor: { type: "user" },
-              payload: { role: "user", parts: [{ type: "text", text: content }] },
+              payload: { role: "user", parts: [{ type: "text", text: restoredText }] },
               extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
               native: native("user.message"),
             });
@@ -368,13 +380,14 @@ export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): C
               }
 
               if (record.type === "text" && typeof record.text === "string") {
+                const restoredText = emptyTextSubs.has(partIndex) ? "" : record.text;
                 createEvent(events, {
                   sessionId,
                   branchId,
                   timestamp: lineTimestamp,
                   kind: "message.created",
                   actor: { type: "user" },
-                  payload: { role: "user", parts: [{ type: "text", text: record.text }] },
+                  payload: { role: "user", parts: [{ type: "text", text: restoredText }] },
                   extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                   native: native(`user.content[${partIndex}].text`),
                 });
@@ -424,6 +437,10 @@ export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): C
           const content = Array.isArray(message?.content) ? message?.content : [];
           const cache = cacheFromClaudeMessage(message);
           const demotedReasoningByIndex = readDemotedReasoningByContentIndex(
+            sidecar,
+            typeof line.uuid === "string" ? line.uuid : undefined,
+          );
+          const assistantEmptyTextSubs = readEmptyTextSubstitutionsByContentIndex(
             sidecar,
             typeof line.uuid === "string" ? line.uuid : undefined,
           );
@@ -485,13 +502,14 @@ export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): C
                 });
                 continue;
               }
+              const restoredAssistantText = assistantEmptyTextSubs.has(partIndex) ? "" : record.text;
               createEvent(events, {
                 sessionId,
                 branchId,
                 timestamp: lineTimestamp,
                 kind: "message.created",
                 actor: { type: "assistant" },
-                payload: { role: "assistant", parts: [{ type: "text", text: record.text }] },
+                payload: { role: "assistant", parts: [{ type: "text", text: restoredAssistantText }] },
                 cache,
                 extensions: withSyntheticTimestampExtension(lineExtensions(line), syntheticTimestamp),
                 native: native(`assistant.content[${partIndex}].text`),

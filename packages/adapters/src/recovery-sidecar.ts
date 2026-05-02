@@ -38,6 +38,28 @@ import { LOSSLESS_SIDECAR_FILE_SUFFIX } from "./defaults";
  * the original chain-of-thought text so a downstream codex export (or any
  * other native-reasoning consumer) can restore the reasoning event.
  */
+/**
+ * Records that a text content block at `contentIndex` was originally empty
+ * ("") but was substituted with "(no content)" to satisfy the Anthropic API
+ * constraint ("messages: text content blocks must be non-empty"). On
+ * reimport the consumer restores the original empty string so that other
+ * providers (e.g. Codex) see the true empty response.
+ *
+ * When `wholeContent` is true, the entire `message.content` was a bare
+ * empty string (not an array) — the importer should restore `content: ""`.
+ */
+export interface EmptyTextSubstitutionMarker {
+  contentIndex: number;
+  wholeContent?: boolean;
+}
+
+/**
+ * A single demoted-thinking recovery marker. Records that the text block
+ * at `contentIndex` in the assistant `message.content[]` array was
+ * produced by demoting a foreign (unsigned) thinking block, and carries
+ * the original chain-of-thought text so a downstream codex export (or any
+ * other native-reasoning consumer) can restore the reasoning event.
+ */
 export interface DemotedReasoningMarker {
   contentIndex: number;
   originalText: string;
@@ -53,6 +75,7 @@ export interface DemotedReasoningMarker {
  */
 export interface LosslessSidecarEntry {
   demotedReasoning?: DemotedReasoningMarker[];
+  emptyTextSubstitutions?: EmptyTextSubstitutionMarker[];
   foreign?: unknown;
   canonicalOverrides?: unknown[];
 }
@@ -133,6 +156,20 @@ export function parseSidecar(text: string | undefined): LosslessSidecar {
       }
       if (markers.length > 0) entry.demotedReasoning = markers;
     }
+    if (Array.isArray(record.emptyTextSubstitutions)) {
+      const markers: EmptyTextSubstitutionMarker[] = [];
+      for (const m of record.emptyTextSubstitutions) {
+        if (!m || typeof m !== "object" || Array.isArray(m)) continue;
+        const mr = m as Record<string, unknown>;
+        if (typeof mr.contentIndex === "number") {
+          markers.push({
+            contentIndex: mr.contentIndex,
+            ...(mr.wholeContent === true ? { wholeContent: true } : {}),
+          });
+        }
+      }
+      if (markers.length > 0) entry.emptyTextSubstitutions = markers;
+    }
     if ("foreign" in record) entry.foreign = record.foreign;
     if (Array.isArray(record.canonicalOverrides)) entry.canonicalOverrides = record.canonicalOverrides;
     if (Object.keys(entry).length > 0) validated[uuid] = entry;
@@ -185,6 +222,31 @@ export function readLineMetadata(
   if (entry.foreign !== undefined) metadata.foreign = entry.foreign;
   if (entry.canonicalOverrides !== undefined) metadata.canonicalOverrides = entry.canonicalOverrides;
   return Object.keys(metadata).length > 0 ? metadata : undefined;
+}
+
+export function setEmptyTextSubstitutionMarkers(
+  sidecar: LosslessSidecar,
+  lineUuid: string,
+  markers: EmptyTextSubstitutionMarker[],
+): void {
+  if (markers.length === 0) return;
+  const existing = sidecar.byLineUuid[lineUuid] ?? {};
+  sidecar.byLineUuid[lineUuid] = { ...existing, emptyTextSubstitutions: markers };
+}
+
+export function readEmptyTextSubstitutionsByContentIndex(
+  sidecar: LosslessSidecar | undefined,
+  lineUuid: string | undefined,
+): Map<number, EmptyTextSubstitutionMarker> {
+  const map = new Map<number, EmptyTextSubstitutionMarker>();
+  if (!sidecar || !lineUuid) return map;
+  const entry = sidecar.byLineUuid[lineUuid];
+  const list = entry?.emptyTextSubstitutions;
+  if (!Array.isArray(list)) return map;
+  for (const marker of list) {
+    map.set(marker.contentIndex, marker);
+  }
+  return map;
 }
 
 export function readDemotedReasoningByContentIndex(

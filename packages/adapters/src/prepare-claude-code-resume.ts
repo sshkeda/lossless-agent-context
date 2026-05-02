@@ -1,7 +1,14 @@
 import type { CanonicalEvent } from "@lossless-agent-context/core";
 import { CANONICAL_OVERRIDE_FIELD, FOREIGN_FIELD } from "./cross-provider";
 import { exportClaudeCodeJsonl } from "./export-claude-code";
-import { emptySidecar, type LosslessSidecar, setDemotedReasoningMarkers, setLineMetadata } from "./recovery-sidecar";
+import {
+  emptySidecar,
+  type EmptyTextSubstitutionMarker,
+  type LosslessSidecar,
+  setDemotedReasoningMarkers,
+  setEmptyTextSubstitutionMarkers,
+  setLineMetadata,
+} from "./recovery-sidecar";
 import { deterministicUuid } from "./utils";
 
 // Claude Code is distributed here as a native/Bun executable, but the bundled
@@ -171,6 +178,52 @@ function demoteUnsignedThinkingBlocks(
   return { content: transformed, demoted };
 }
 
+// Anthropic's API rejects text content blocks with empty strings:
+//   "messages: text content blocks must be non-empty"
+// Strip empty text blocks from message content arrays, and replace empty
+// bare-string content with a placeholder so the message stays valid.
+// Claude Code uses the same pattern internally (QE="(no content)" in the
+// bundled cli.js — see o8(), fV(), n9() which all substitute empty text
+// with "(no content)" before building API messages).
+//
+// Returns { keep, markers } — keep=false means the message should be
+// dropped entirely (all content was empty). markers records which blocks
+// were substituted so the sidecar can restore "" on reimport.
+function stripEmptyTextBlocks(message: Record<string, unknown>): {
+  keep: boolean;
+  markers: EmptyTextSubstitutionMarker[];
+} {
+  const content = message.content;
+  if (typeof content === "string") {
+    if (content.length === 0) {
+      message.content = "(no content)";
+      return { keep: true, markers: [{ contentIndex: 0, wholeContent: true }] };
+    }
+    return { keep: true, markers: [] };
+  }
+  if (!Array.isArray(content)) return { keep: true, markers: [] };
+  const markers: EmptyTextSubstitutionMarker[] = [];
+  const filtered: unknown[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== "object" || Array.isArray(block)) {
+      filtered.push(block);
+      continue;
+    }
+    const record = block as Record<string, unknown>;
+    if (record.type === "text" && typeof record.text === "string" && record.text.length === 0) {
+      markers.push({ contentIndex: filtered.length });
+      // Replace with placeholder instead of dropping, to preserve the
+      // block's position in the content array for sidecar indexing.
+      filtered.push({ type: "text", text: "(no content)" });
+      continue;
+    }
+    filtered.push(block);
+  }
+  if (filtered.length === 0) return { keep: false, markers: [] };
+  message.content = filtered;
+  return { keep: true, markers };
+}
+
 function sanitizeClaudeToolUseIds(value: unknown): void {
   if (!Array.isArray(value)) return;
   for (const block of value) {
@@ -327,6 +380,11 @@ export function prepareClaudeCodeResumeSeed(
             setDemotedReasoningMarkers(sidecar, obj.uuid, demoted);
           }
         }
+        const emptyTextResult = stripEmptyTextBlocks(messageRecord);
+        if (!emptyTextResult.keep) continue;
+        if (emptyTextResult.markers.length > 0 && typeof obj.uuid === "string") {
+          setEmptyTextSubstitutionMarkers(sidecar, obj.uuid, emptyTextResult.markers);
+        }
         ensureAssistantMessageId(obj, lineIndex);
       }
     }
@@ -334,9 +392,15 @@ export function prepareClaudeCodeResumeSeed(
     if (type === "user") {
       const message = obj.message;
       if (message && typeof message === "object" && !Array.isArray(message)) {
-        const content = (message as Record<string, unknown>).content;
+        const messageRecord = message as Record<string, unknown>;
+        const content = messageRecord.content;
         stripRejectedToolResultFields(content);
         sanitizeClaudeToolUseIds(content);
+        const emptyTextResult = stripEmptyTextBlocks(messageRecord);
+        if (!emptyTextResult.keep) continue;
+        if (emptyTextResult.markers.length > 0 && typeof obj.uuid === "string") {
+          setEmptyTextSubstitutionMarkers(sidecar, obj.uuid, emptyTextResult.markers);
+        }
       }
     }
 
