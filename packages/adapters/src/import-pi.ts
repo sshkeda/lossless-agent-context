@@ -245,6 +245,22 @@ export function importPiSessionJsonl(text: string): CanonicalEvent[] {
               extensions,
               native: native("custom_message"),
             });
+          } else {
+            // Empty custom_messages (e.g. pi-continue) must still be preserved
+            // for lossless roundtrip even though they carry no semantic content.
+            createEvent(events, {
+              sessionId,
+              branchId,
+              timestamp: piTimestamp(line.timestamp),
+              kind: "provider.event",
+              payload: {
+                provider: "pi",
+                eventType: `custom_message.${typeof line.customType === "string" ? line.customType : "unknown"}`,
+                raw: line,
+              },
+              extensions,
+              native: native("custom_message"),
+            });
           }
           break;
         }
