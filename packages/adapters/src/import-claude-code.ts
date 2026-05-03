@@ -197,6 +197,32 @@ function normalizedEditToolResultDetailsFromClaudeLine(
   };
 }
 
+/**
+ * Claude Code's Read tool returns content with `cat -n` line number prefixes
+ * (e.g. "1\tfirst line\n2\tsecond line\n"). Other agents don't understand this
+ * format, so we strip line numbers from the canonical payload.output.
+ * The original is preserved in native.raw for lossless Claude→Claude roundtrips.
+ */
+const READ_TOOL_NAMES = new Set(["Read", "read", "View", "view"]);
+const CAT_N_LINE_RE = /^\s*\d+\t/;
+
+function stripCatNLineNumbers(content: unknown): unknown {
+  if (typeof content !== "string") return content;
+  // Only strip if the content actually looks like cat -n output
+  // (most lines should match the pattern)
+  const lines = content.split("\n");
+  if (lines.length === 0) return content;
+  // Check if at least the first non-empty line matches the pattern
+  const firstNonEmpty = lines.find((l) => l.trim().length > 0);
+  if (!firstNonEmpty || !CAT_N_LINE_RE.test(firstNonEmpty)) return content;
+  // Verify a majority of non-empty lines match (avoid false positives)
+  const nonEmptyLines = lines.filter((l) => l.trim().length > 0);
+  const matchCount = nonEmptyLines.filter((l) => CAT_N_LINE_RE.test(l)).length;
+  if (matchCount < nonEmptyLines.length * 0.8) return content;
+  // Strip: remove the leading "  123\t" prefix from each line
+  return lines.map((l) => l.replace(/^\s*\d+\t/, "")).join("\n");
+}
+
 function toolResultDetailsFromClaudeRecord(
   record: Record<string, unknown>,
   line: Record<string, unknown>,
@@ -361,6 +387,14 @@ export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): C
                 const toolCallId = record.tool_use_id;
                 const toolName = toolNameByCallId.get(toolCallId);
                 const details = toolResultDetailsFromClaudeRecord(record, line, toolName);
+                const rawOutput = record.content;
+                // Only strip line numbers from native Claude Code Read results.
+                // Skip for cross-provider lines (__lac_foreign) to preserve lossless roundtrip.
+                const isForeign = FOREIGN_FIELD in line && line[FOREIGN_FIELD] != null;
+                const output =
+                  !isForeign && toolName && READ_TOOL_NAMES.has(toolName)
+                    ? stripCatNLineNumbers(rawOutput)
+                    : rawOutput;
                 createEvent(events, {
                   sessionId,
                   branchId,
@@ -369,7 +403,7 @@ export function importClaudeCodeJsonl(text: string, sidecar: LosslessSidecar): C
                   actor: toolActor(toolName),
                   payload: {
                     toolCallId,
-                    output: record.content,
+                    output,
                     isError: Boolean(record.is_error),
                     ...(details !== undefined ? { details } : {}),
                   },
